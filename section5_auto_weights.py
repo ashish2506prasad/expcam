@@ -21,7 +21,7 @@ ensure_pkg_path()
 
 from cli import add_common_args, resolve_run
 from classifiers import load_classifier
-from config import DEFAULT_LAMBDAS, MANUAL_TRIAL_CONFIGS, P_TARGETS
+from config import DEFAULT_LAMBDAS, MANUAL_TRIAL_CONFIGS, P_TARGETS, figure_dir
 from io_utils import load_json, mean_std, rows_to_excel, save_json
 from runner import maybe_train_and_eval
 from train import TrainConfig, image_seed, log
@@ -57,7 +57,6 @@ def run_section5(args) -> None:
                     log_every=args.log_every,
                     record_curve=(
                         rec["id"] == eval_set["curve_image_id"]
-                        and backbone == args.backbones[0]
                         and abs(p - 0.10) < 1e-9
                     ),
                 )
@@ -95,9 +94,35 @@ def run_section5(args) -> None:
     _figures(eval_set, images, args, rows, manual)
 
 
+def run_section5_figures_only(args) -> None:
+    """Regenerate Section 5 figures from saved JSON (no retraining)."""
+    eval_set, images, device = resolve_run(args)
+    out_root = args.out / "section5"
+    js = out_root / "auto_runs.json"
+    if not js.exists():
+        log("No section5/auto_runs.json found — nothing to plot.")
+        return
+    rows = load_json(js)
+    manual = []
+    s1 = args.out / "section1" / "all_runs.json"
+    if s1.exists():
+        manual = [r for r in load_json(s1) if r.get("protocol") == "loo" and r.get("config") == "Full"]
+    log(f"Figures-only: loaded {len(rows)} auto rows from disk")
+    _figures(eval_set, images, args, rows, manual)
+
+
 def _figures(eval_set, images, args, rows, manual) -> None:
-    fig_dir = args.out / "section5" / "figures"
-    backbone = args.backbones[0]
+    backbones = list(args.backbones) or sorted({r["backbone"] for r in rows})
+    for backbone in backbones:
+        if not any(r["backbone"] == backbone for r in rows):
+            log(f"[figures] skip {backbone}: no Section 5 runs")
+            continue
+        fig_dir = figure_dir(args.out, "section5", backbone)
+        log(f"[figures] {backbone} -> {fig_dir}")
+        _figures_for_backbone(eval_set, images, args, rows, manual, backbone, fig_dir)
+
+
+def _figures_for_backbone(eval_set, images, args, rows, manual, backbone, fig_dir) -> None:
     p_targets = sorted({r["p_target"] for r in rows})
     # Fig F1: variance of p_actual, manual vs auto, one panel group per p_target
     # Manual has a single natural size; compare std at each auto p_target vs that global manual distribution
@@ -138,12 +163,13 @@ def _figures(eval_set, images, args, rows, manual) -> None:
                 ys,
                 "top-1 agreement (manual)",
                 "top-1 agreement (automatic)",
-                "Fig F2 — per-image fidelity parity",
+                f"Fig F2 — per-image fidelity parity ({backbone})",
             )
             diffs = np.asarray(ys) - np.asarray(xs)
             save_json(
-                args.out / "section5" / "fidelity_parity_stats.json",
+                fig_dir / "fidelity_parity_stats.json",
                 {
+                    "backbone": backbone,
                     "mean_diff": float(diffs.mean()),
                     "std_diff": float(diffs.std(ddof=1) if len(diffs) > 1 else 0.0),
                     "n": int(len(diffs)),
@@ -169,40 +195,45 @@ def _figures(eval_set, images, args, rows, manual) -> None:
         ax.set_yscale("log")
         ax.set_xlabel("iteration")
         ax.set_ylabel("effective weight exp(-s_i)")
-        ax.set_title("Fig F3 — uncertainty-weight trajectories")
+        ax.set_title(f"Fig F3 — uncertainty-weight trajectories ({backbone})")
+        ax.grid(True, which="both", linestyle=":", linewidth=0.6, alpha=0.65)
+        ax.set_axisbelow(True)
         ax.legend(ncol=3, fontsize=8)
         fig.tight_layout()
         fig.savefig(fig_dir / "FigF3_weight_trajectories.png", dpi=150)
         plt.close(fig)
 
-    # Fig F4: transfer across backbones (proxy for domains; trainx is one domain)
-    labels = list(args.backbones)
-    means_auto, stds_auto, means_man, stds_man = [], [], [], []
-    for bb in labels:
-        a = [r["top1_agreement"] for r in rows if r["backbone"] == bb]
-        m = [r["top1_agreement"] for r in manual if r["backbone"] == bb]
-        sa, sm = mean_std(a), mean_std(m)
-        means_auto.append(sa["mean"] or 0)
-        stds_auto.append(sa["std"] or 0)
-        means_man.append(sm["mean"] or 0)
-        stds_man.append(sm["std"] or 0)
+    # Fig F4: manual vs automatic for this backbone
+    a = [r["top1_agreement"] for r in rows if r["backbone"] == backbone]
+    m = [r["top1_agreement"] for r in manual if r["backbone"] == backbone]
+    sa, sm = mean_std(a), mean_std(m)
     grouped_bars(
-        fig_dir / "FigF4_backbone_transfer.png",
-        labels,
+        fig_dir / "FigF4_manual_vs_auto.png",
+        ["manual λ", "automatic"],
         {
-            "manual λ": (means_man, stds_man),
-            "automatic": (means_auto, stds_auto),
+            "top-1 agreement": (
+                [sm["mean"] or 0, sa["mean"] or 0],
+                [sm["std"] or 0, sa["std"] or 0],
+            ),
         },
         "top-1 agreement",
-        "Fig F4 — same auto scheme across backbones (trainx ImageNet subset)",
+        f"Fig F4 — manual vs automatic ({backbone})",
     )
 
 
 def main(argv=None):
     p = add_common_args(argparse.ArgumentParser(description="Section 5: automatic weights"))
     p.add_argument("--constraint", choices=("lagrangian", "project"), default="lagrangian")
+    p.add_argument(
+        "--figures-only",
+        action="store_true",
+        help="Skip training; regenerate per-backbone figures from auto_runs.json",
+    )
     args = p.parse_args(argv)
-    run_section5(args)
+    if args.figures_only:
+        run_section5_figures_only(args)
+    else:
+        run_section5(args)
 
 
 if __name__ == "__main__":

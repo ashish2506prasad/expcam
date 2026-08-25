@@ -19,6 +19,7 @@ from PIL import Image
 from config import (
     DEFAULT_BACKBONES,
     N_PER_CLASS,
+    QUALITATIVE_PER_CLASS,
     SEED,
     TRAINX_CLASSES,
     add_where_args,
@@ -96,7 +97,10 @@ def build_eval_set(
         "n_classes": len(classes_present),
         "classes": classes_present,
         "backbones": list(DEFAULT_BACKBONES),
-        "qualitative_ids": [images[i * n_per_class]["id"] for i in range(min(6, len(classes_present)))],
+        "qualitative_ids": qualitative_image_ids(
+            {"images": images, "classes": classes_present},
+            per_class=min(QUALITATIVE_PER_CLASS, n_per_class),
+        ),
         "curve_image_id": images[0]["id"],
         "images": images,
         "note": (
@@ -118,6 +122,11 @@ def load_eval_set(path: Optional[Path] = None) -> Dict:
     if not path.exists():
         return build_eval_set(path=path)
     data = load_json(path)
+    if data.get("n_per_class") != C.N_PER_CLASS:
+        print(
+            f"Eval set has n_per_class={data.get('n_per_class')} but config has {C.N_PER_CLASS}; rebuilding."
+        )
+        return build_eval_set(path=path, force=True)
     data["root"] = str(C.TRAINX_DIR)
     return data
 
@@ -145,6 +154,19 @@ def records_by_class(eval_set: Dict) -> Dict[str, List[Dict]]:
     for rec in eval_set["images"]:
         out.setdefault(rec["wnid"], []).append(rec)
     return out
+
+
+def qualitative_image_ids(eval_set: Dict, per_class: Optional[int] = None) -> List[str]:
+    """Stable qualitative panel set: first `per_class` eval images from each class."""
+    if per_class is None:
+        per_class = QUALITATIVE_PER_CLASS
+    by_class = records_by_class(eval_set)
+    class_order = eval_set.get("classes") or sorted(by_class.keys())
+    ids: List[str] = []
+    for wnid in class_order:
+        for rec in by_class.get(wnid, [])[:per_class]:
+            ids.append(rec["id"])
+    return ids
 
 
 def other_class_records(eval_set: Dict, wnid: str) -> List[Dict]:

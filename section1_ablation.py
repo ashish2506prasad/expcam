@@ -24,10 +24,11 @@ from config import (
     SWEEP_MULTS,
     SWEEP_SECONDARY_METRIC,
     SWEEP_TERMS,
+    figure_dir,
     loo_configs,
 )
-from data import load_tensor
-from io_utils import mean_std, rows_to_excel, save_json
+from data import load_tensor, qualitative_image_ids
+from io_utils import load_json, mean_std, rows_to_excel, save_json
 from runner import maybe_train_and_eval, run_dir
 from train import TrainConfig, image_seed, log
 from viz import (
@@ -46,6 +47,18 @@ from viz import (
 def _agg(rows, key):
     vals = [r[key] for r in rows if r.get(key) is not None]
     return mean_std(vals)
+
+
+def _collect_rows_from_disk(out_root: Path) -> list:
+    """Rebuild all_rows from saved metrics.json (for resume / figures-only)."""
+    section = out_root / "section1"
+    rows = []
+    for path in sorted(section.rglob("metrics.json")):
+        rel = path.relative_to(section)
+        if len(rel.parts) < 3:
+            continue
+        rows.append(load_json(path))
+    return rows
 
 
 def run_section1(args) -> None:
@@ -79,7 +92,6 @@ def run_section1(args) -> None:
                     record_curve=(
                         cfg_name == "Full"
                         and rec["id"] == eval_set["curve_image_id"]
-                        and backbone == args.backbones[0]
                     ),
                 )
                 row = maybe_train_and_eval(
@@ -141,11 +153,42 @@ def run_section1(args) -> None:
     _make_figures(eval_set, images, args, all_rows, device)
 
 
+def run_section1_figures_only(args) -> None:
+    """Aggregate metrics already on disk and regenerate Section 1 figures."""
+    eval_set, images, device = resolve_run(args)
+    out_root = args.out
+    all_rows = _collect_rows_from_disk(out_root)
+    if not all_rows:
+        log("No section1 metrics.json found — nothing to plot.")
+        return
+    section = "section1"
+    log(f"Figures-only: loaded {len(all_rows)} runs from disk")
+    save_json(out_root / section / "all_runs.json", all_rows)
+    rows_to_excel(
+        out_root / section / "section1_results.xlsx",
+        {
+            "loo": [r for r in all_rows if r.get("protocol") == "loo"],
+            "sweep": [r for r in all_rows if r.get("protocol") == "sweep"],
+            "all": all_rows,
+        },
+    )
+    _make_figures(eval_set, images, args, all_rows, device)
+    log(f"Wrote figures under {out_root / section}/figures_*")
+
+
 def _make_figures(eval_set, images, args, all_rows, device) -> None:
-    fig_dir = args.out / "section1" / "figures"
+    backbones = list(args.backbones) or sorted({r["backbone"] for r in all_rows})
+    for backbone in backbones:
+        if not any(r["backbone"] == backbone for r in all_rows):
+            log(f"[figures] skip {backbone}: no Section 1 runs")
+            continue
+        fig_dir = figure_dir(args.out, "section1", backbone)
+        log(f"[figures] {backbone} -> {fig_dir}")
+        _make_figures_for_backbone(eval_set, images, args, all_rows, device, backbone, fig_dir)
+
+
+def _make_figures_for_backbone(eval_set, images, args, all_rows, device, backbone, fig_dir) -> None:
     loo_order = ["Full"] + [f"-L_{t}" for t in LOSS_TERMS]
-    # Fig A1 / A2: average over images, one backbone panel-set (resnet18 if present)
-    backbone = args.backbones[0]
     loo_rows = [r for r in all_rows if r.get("protocol") == "loo" and r["backbone"] == backbone]
     by_cfg = defaultdict(list)
     for r in loo_rows:
@@ -199,37 +242,42 @@ def _make_figures(eval_set, images, args, all_rows, device) -> None:
         ]
         if not rows:
             continue
-        by_mult = defaultdict(list)
+        by_lambda = defaultdict(list)
         for r in rows:
-            by_mult[float(r["mult"])].append(r)
-        xs = sorted(by_mult)
+            by_lambda[float(r["lambda_value"])].append(r)
+        xs = sorted(by_lambda)
         left, ls, right, rs = [], [], [], []
         sec = SWEEP_SECONDARY_METRIC[term]
-        for m in xs:
-            a = _agg(by_mult[m], "p_actual_pct")
-            b = _agg(by_mult[m], sec)
+        for lam_val in xs:
+            a = _agg(by_lambda[lam_val], "p_actual_pct")
+            b = _agg(by_lambda[lam_val], sec)
             left.append(a["mean"] or 0)
             ls.append(a["std"] or 0)
             scale = 100.0 if sec == "top1_agreement" else 1.0
             right.append(scale * (b["mean"] or 0))
             rs.append(scale * (b["std"] or 0))
-        sweep_dual_axis(
-            fig_dir / f"FigA{i}_sweep_L_{term}.png",
-            xs,
-            left,
-            ls,
-            right,
-            rs,
-            "mask size %",
-            sec,
-            f"Fig A{i} — λ_{term} sweep ({backbone})",
-        )
+        xlabel = f"λ_{term}"
+        base_title = f"Fig A{i} — λ_{term} sweep ({backbone})"
+        for suffix, xscale in (("_log", "symlog"), ("_linear", "linear")):
+            sweep_dual_axis(
+                fig_dir / f"FigA{i}_sweep_L_{term}{suffix}.png",
+                xs,
+                left,
+                ls,
+                right,
+                rs,
+                "mask size %",
+                sec,
+                base_title + (" (log x)" if xscale != "linear" else " (linear x)"),
+                xlabel=xlabel,
+                xscale=xscale,
+            )
 
     # Fig A10 training curves
     curve_path = (
         args.out
         / "section1"
-        / args.backbones[0]
+        / backbone
         / "loo_Full"
         / eval_set["curve_image_id"]
         / "loss_curve.json"
@@ -240,16 +288,15 @@ def _make_figures(eval_set, images, args, all_rows, device) -> None:
         training_curves(fig_dir / "FigA10_training_curves.png", load_json(curve_path))
 
     # Fig A11 qualitative grid — same images for every ablated term
-    _fig_a11(eval_set, args, device, fig_dir)
+    _fig_a11(eval_set, args, device, fig_dir, backbone)
 
 
-def _fig_a11(eval_set, args, device, fig_dir: Path) -> None:
+def _fig_a11(eval_set, args, device, fig_dir: Path, backbone: str) -> None:
     from classifiers import load_classifier
     from runner import load_masks
 
-    qids = eval_set["qualitative_ids"][:4]
+    qids = qualitative_image_ids(eval_set)
     id_to_rec = {r["id"]: r for r in eval_set["images"]}
-    backbone = args.backbones[0]
     bundle = load_classifier(backbone, device)
     cols = [
         ("Full", "loo_Full"),
@@ -288,8 +335,16 @@ def _fig_a11(eval_set, args, device, fig_dir: Path) -> None:
 
 def main(argv=None):
     p = add_common_args(argparse.ArgumentParser(description="Section 1: hyperparameter ablation"))
+    p.add_argument(
+        "--figures-only",
+        action="store_true",
+        help="Skip training; rebuild all_runs.json and figures from existing metrics.json",
+    )
     args = p.parse_args(argv)
-    run_section1(args)
+    if args.figures_only:
+        run_section1_figures_only(args)
+    else:
+        run_section1(args)
 
 
 if __name__ == "__main__":

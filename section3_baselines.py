@@ -18,8 +18,8 @@ ensure_pkg_path()
 from baselines import BASELINE_NAMES, compute_heatmap, otsu_binarize, topk_binarize
 from cli import add_common_args, resolve_run
 from classifiers import load_classifier
-from config import N_INSERT_SEEDS, N_RISE_MASKS
-from data import load_tensor
+from config import N_INSERT_SEEDS, N_RISE_MASKS, figure_dir
+from data import load_tensor, qualitative_image_ids
 from io_utils import ensure_dir, load_json, mean_std, rows_to_excel, save_json
 from metrics import evaluate_explanation, insertion_curve
 from runner import load_masks, run_dir
@@ -115,6 +115,19 @@ def run_section3(args) -> None:
     _figures(eval_set, images, args, rows, curves, device)
 
 
+def run_section3_figures_only(args) -> None:
+    """Regenerate Section 3 figures from saved all_runs.json (no re-computation)."""
+    eval_set, images, device = resolve_run(args)
+    out_root = args.out / "section3"
+    js = out_root / "all_runs.json"
+    if not js.exists():
+        log("No section3/all_runs.json found — nothing to plot.")
+        return
+    rows = load_json(js)
+    log(f"Figures-only: loaded {len(rows)} baseline rows from disk")
+    _figures(eval_set, images, args, rows, defaultdict(list), device)
+
+
 def _mean_curve(items):
     import numpy as np
 
@@ -125,8 +138,17 @@ def _mean_curve(items):
 
 
 def _figures(eval_set, images, args, rows, curves, device) -> None:
-    fig_dir = args.out / "section3" / "figures"
-    backbone = args.backbones[0]
+    backbones = list(args.backbones) or sorted({r["backbone"] for r in rows})
+    for backbone in backbones:
+        if not any(r["backbone"] == backbone for r in rows):
+            log(f"[figures] skip {backbone}: no Section 3 runs")
+            continue
+        fig_dir = figure_dir(args.out, "section3", backbone)
+        log(f"[figures] {backbone} -> {fig_dir}")
+        _figures_for_backbone(eval_set, images, args, rows, curves, device, backbone, fig_dir)
+
+
+def _figures_for_backbone(eval_set, images, args, rows, curves, device, backbone, fig_dir) -> None:
     matched = [r for r in rows if r["mode"] == "size_matched" and r["backbone"] == backbone]
     methods = []
     for r in matched:
@@ -188,13 +210,12 @@ def _figures(eval_set, images, args, rows, curves, device) -> None:
         f"Fig C3 — own-threshold vs size-matched ({backbone})",
     )
 
-    _fig_c4(eval_set, args, device, fig_dir)
+    _fig_c4(eval_set, args, device, fig_dir, backbone)
 
 
-def _fig_c4(eval_set, args, device, fig_dir) -> None:
-    qids = eval_set["qualitative_ids"][:6]
+def _fig_c4(eval_set, args, device, fig_dir, backbone) -> None:
+    qids = qualitative_image_ids(eval_set)
     id_to_rec = {r["id"]: r for r in eval_set["images"]}
-    backbone = args.backbones[0]
     bundle = load_classifier(backbone, device)
     method_cols = ["EXP-CAM", "gradcam", "gradcam++", "layercam"]
     if bundle.cam_is_vit:
@@ -244,8 +265,16 @@ def _fig_c4(eval_set, args, device, fig_dir) -> None:
 def main(argv=None):
     p = add_common_args(argparse.ArgumentParser(description="Section 3: fair baselines"))
     p.add_argument("--rise-masks", type=int, default=N_RISE_MASKS)
+    p.add_argument(
+        "--figures-only",
+        action="store_true",
+        help="Skip baseline computation; regenerate per-backbone figures from all_runs.json",
+    )
     args = p.parse_args(argv)
-    run_section3(args)
+    if args.figures_only:
+        run_section3_figures_only(args)
+    else:
+        run_section3(args)
 
 
 if __name__ == "__main__":

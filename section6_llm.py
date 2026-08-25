@@ -21,24 +21,60 @@ except ImportError:
 ensure_pkg_path()
 
 from cli import device_from_flag
-from config import SEED, TEMPERATURE, add_where_args
+from config import DISTILGPT2_LOCAL, SEED, TEMPERATURE, add_where_args
 from io_utils import ensure_dir, rows_to_excel, save_json
 from losses import hard_st
 
 
 PROMPTS = [
-    ("The movie was surprisingly well acted but the script was weak. Sentiment:", "Negative"),
-    ("I loved every minute of this delightful film. Sentiment:", "Positive"),
-    ("The food arrived cold and the waiter ignored us. Sentiment:", "Negative"),
-    ("A warm, generous performance that lifted the whole play. Sentiment:", "Positive"),
-    ("This gadget broke on the second day. Sentiment:", "Negative"),
-    ("Battery life exceeded every claim in the manual. Sentiment:", "Positive"),
-    ("The plot twists felt cheap and unearned. Sentiment:", "Negative"),
-    ("Quietly moving and beautifully shot. Sentiment:", "Positive"),
-    ("Customer support hung up twice. Sentiment:", "Negative"),
-    ("The hotel room was spotless and the staff kind. Sentiment:", "Positive"),
-    ("I would not recommend this to anyone. Sentiment:", "Negative"),
-    ("Best concert I have attended this year. Sentiment:", "Positive"),
+    (
+        "The movie was surprisingly well acted, with nuanced performances by the entire cast, but unfortunately the script was weak, predictable, and failed to deliver emotional impact. Sentiment:", 
+        "Negative"
+    ),
+    (
+        "I loved every minute of this delightful film, from the witty dialogue and memorable soundtrack to the heartfelt story and warm chemistry between the lead actors. Sentiment:",
+        "Positive"
+    ),
+    (
+        "The food arrived completely cold and the waiter ignored us throughout dinner, even when we repeatedly tried to get their attention for drinks or dessert orders. Sentiment:",
+        "Negative"
+    ),
+    (
+        "A warm, generous performance from the lead actor lifted the whole play, bringing unexpected humor and genuine compassion to a script that otherwise felt familiar and formulaic. Sentiment:",
+        "Positive"
+    ),
+    (
+        "This gadget broke on the second day of use, failed to charge properly, and when I contacted customer support, I received no useful help or solution for my problem. Sentiment:",
+        "Negative"
+    ),
+    (
+        "Battery life exceeded every claim in the manual, lasting days longer than expected even with frequent use, and the device performed smoothly and reliably the entire time. Sentiment:",
+        "Positive"
+    ),
+    (
+        "The plot twists felt cheap and unearned, relying on tired clichés and transparent motives that made it hard to care about any of the main characters at all. Sentiment:",
+        "Negative"
+    ),
+    (
+        "Quietly moving and beautifully shot, the film's cinematography added depth to the emotional story and the understated score pulled me in from the opening scene. Sentiment:",
+        "Positive"
+    ),
+    (
+        "Customer support hung up twice while I was explaining my problem, and multiple follow-up emails went completely unanswered, leaving my issue unresolved and my frustration high. Sentiment:",
+        "Negative"
+    ),
+    (
+        "The hotel room was spotless, with fresh linens and modern amenities, and the staff were consistently friendly, going out of their way to help us enjoy our stay. Sentiment:",
+        "Positive"
+    ),
+    (
+        "I would not recommend this to anyone; the experience was a huge disappointment, from the unhelpful service and uncomfortable seating to the overpriced, low-quality product. Sentiment:",
+        "Negative"
+    ),
+    (
+        "Best concert I have attended this year, featuring incredible musicianship, flawless sound quality, and an engaged audience that made the atmosphere electric from start to finish. Sentiment:",
+        "Positive"
+    ),
 ]
 
 
@@ -189,20 +225,27 @@ def run_section6(args) -> None:
         )
 
     device = device_from_flag(args.device)
-    print(f"Loading {args.model} on {device} ...")
+    model_path = Path(args.model)
+    local_only = model_path.is_dir()
+    print(f"Loading {model_path} on {device} ...")
+    load_kw = {"local_files_only": True} if local_only else {}
     try:
-        tokenizer = AutoTokenizer.from_pretrained(args.model)
-        model = AutoModelForCausalLM.from_pretrained(args.model).to(device)
+        tokenizer = AutoTokenizer.from_pretrained(str(model_path), **load_kw)
+        model = AutoModelForCausalLM.from_pretrained(str(model_path), **load_kw).to(device)
     except Exception as e:
-        raise SystemExit(
-            f"Could not load {args.model}. Pass --model distilgpt2 for a local-small run.\n{e}"
+        hint = (
+            f"Expected a full HF snapshot at {model_path} "
+            "(config.json + tokenizer + pytorch_model.bin or model.safetensors)."
+            if local_only
+            else "Pass --model with a local directory or Hugging Face model id."
         )
+        raise SystemExit(f"Could not load {model_path}. {hint}\n{e}")
 
     lambdas = {
         "act": 1.0,
-        "ce": 5.0,
-        "kl": 1.0,
-        "area": 2.0,
+        "ce": 1.0,
+        "kl": 0.5,
+        "area": 1.0,
         "bin": 0.5,
         "contig": 1.0,
         "rob": 1.0,
@@ -259,9 +302,13 @@ def run_section6(args) -> None:
 def main(argv=None):
     p = argparse.ArgumentParser(description="Section 6: exploratory LLM token masks")
     add_where_args(p)
-    p.add_argument("--model", default="distilgpt2", help="Causal LM id. Paper target: meta-llama/Llama-3.2-3B")
+    p.add_argument(
+        "--model",
+        default=str(DISTILGPT2_LOCAL),
+        help=f"Causal LM path or Hugging Face id (default: {DISTILGPT2_LOCAL})",
+    )
     p.add_argument("--device", default="auto")
-    p.add_argument("--steps", type=int, default=200)
+    p.add_argument("--steps", type=int, default=1000)
     p.add_argument("--lr", type=float, default=5e-2)
     p.add_argument("--n-prompts", type=int, default=12)
     p.add_argument("--seed", type=int, default=SEED)

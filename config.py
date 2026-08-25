@@ -21,14 +21,28 @@ KAGGLE_RUNS = Path("/kaggle/working/expcam_runs")
 KAGGLE_WORKING = Path("/kaggle/working")
 
 SEED = 0
-N_IMAGES = 70  # 10 per class × 7 trainx classes (within the recommended 50–100)
-N_PER_CLASS = 10
+N_IMAGES = 98  # 14 per class × 7 trainx classes (within the recommended 50–100)
+N_PER_CLASS = 14
+QUALITATIVE_PER_CLASS = 2  # images per class in Fig A11, B5, C4, E4, etc.
 IMAGE_SIZE = 224
 
 DEFAULT_BACKBONES = ("resnet18", "efficientnet_b0", "vit_b_16")
 
+# Per-backbone figure output folders under section1/ … section5/.
+FIGURE_DIRS = {
+    "resnet18": "figures_resnet",
+    "efficientnet_b0": "figures_efficient",
+    "vit_b_16": "figures_vit",
+}
+
+
+def figure_dir(out_root: Path, section: str, backbone: str) -> Path:
+    """Return e.g. section1/figures_resnet/ for a given backbone."""
+    sub = FIGURE_DIRS.get(backbone, f"figures_{backbone}")
+    return Path(out_root) / section / sub
+
 # Per-image U-Net training (AM6 cell 15 / AM4–AM5 full-model cells)
-STEPS = 880
+STEPS = 400
 LR = 5e-5
 OPTIMIZER_NAME = "adam"
 TEMPERATURE = 2.0
@@ -50,7 +64,7 @@ SWEEP_TERMS = ("ce", "kl", "area", "bin", "tv", "rob")  # L_act stays fixed
 SWEEP_MULTS = (0.0, 0.1, 0.5, 1.0, 2.0, 5.0, 10.0)
 
 BUDGETS = (0.50, 0.30, 0.20, 0.10, 0.05, 0.02, 0.01, 0.005)
-FIDELITY_TAUS = (0.95, 0.90)
+FIDELITY_TAUS = (0.95, 0.90, 1.0)
 P_TARGETS = (0.05, 0.10, 0.20)
 
 LAYER_WEIGHTS_RESNET = {
@@ -96,6 +110,9 @@ AUG_BRIGHTNESS = 0.10
 
 # Retrospective count of distinct λ tuples in AM0–AM6 (Section 5 "tuning cost")
 MANUAL_TRIAL_CONFIGS = 18
+
+# Section 6 — local causal LM (no Hugging Face hub on air-gapped clusters)
+DISTILGPT2_LOCAL = PROJECT_ROOT / "distilgpt2-local"
 
 
 def detect_where() -> str:

@@ -29,8 +29,16 @@ def caption(p_pct: float, conf: float, top1: float) -> str:
     return f"p={p_pct:.1f}%  conf={conf:.2f}  top1={mark}"
 
 
+def _style_axis(ax, *, grid: bool = True) -> None:
+    if grid:
+        ax.grid(True, which="both", linestyle=":", linewidth=0.6, alpha=0.65)
+        ax.set_axisbelow(True)
+
+
 def _save(fig, path: Path) -> None:
     ensure_dir(path.parent)
+    for ax in fig.get_axes():
+        _style_axis(ax)
     fig.savefig(path, dpi=150, bbox_inches="tight")
     plt.close(fig)
 
@@ -92,19 +100,24 @@ def sweep_dual_axis(
     left_ylabel: str,
     right_ylabel: str,
     title: str,
-    xlabel: str = "coefficient (× default)",
+    xlabel: str = "λ",
+    xscale: str = "symlog",
 ) -> None:
     fig, ax = plt.subplots(figsize=(6.5, 4.2))
     xs = np.asarray(xs, dtype=float)
     ax.plot(xs, left_mean, color="#4C78A8", marker="o", label=left_ylabel)
     ax.fill_between(xs, np.asarray(left_mean) - left_std, np.asarray(left_mean) + left_std, color="#4C78A8", alpha=0.2)
-    ax.set_xscale("symlog", linthresh=0.05)
+    if xscale == "symlog":
+        ax.set_xscale("symlog", linthresh=0.05)
+    elif xscale not in ("linear", None):
+        ax.set_xscale(xscale)
     ax.set_xlabel(xlabel)
     ax.set_ylabel(left_ylabel, color="#4C78A8")
     ax2 = ax.twinx()
     ax2.plot(xs, right_mean, color="#F58518", marker="s", label=right_ylabel)
     ax2.fill_between(xs, np.asarray(right_mean) - right_std, np.asarray(right_mean) + right_std, color="#F58518", alpha=0.2)
     ax2.set_ylabel(right_ylabel, color="#F58518")
+    _style_axis(ax2)
     ax.set_title(title)
     fig.tight_layout()
     _save(fig, path)
@@ -139,14 +152,18 @@ def fidelity_vs_budget(
     p_actual_std: Sequence[float],
     p_star: Optional[float],
     title: str,
+    xscale: str = "log",
+    tau: float = 0.95,
 ) -> None:
     fig, ax = plt.subplots(figsize=(7.5, 4.8))
     p = np.asarray(p) * 100
-    colors = {"top1_agreement": "#4C78A8", "one_minus_normalized_kl": "#54A24B"}
+    colors = {"top1_agreement": "#4C78A8", "exp_minus_kl": "#54A24B", "one_minus_normalized_kl": "#54A24B"}
+    labels = {"top1_agreement": "top-1 agreement", "exp_minus_kl": "exp(−KL)", "one_minus_normalized_kl": "1 − nKL (legacy)"}
     for name, (mean, std) in series.items():
-        ax.plot(p, mean, marker="o", label=name, color=colors.get(name))
+        ax.plot(p, mean, marker="o", label=labels.get(name, name), color=colors.get(name))
         ax.fill_between(p, np.asarray(mean) - std, np.asarray(mean) + std, alpha=0.18, color=colors.get(name))
-    ax.set_xscale("log")
+    if xscale != "linear":
+        ax.set_xscale(xscale)
     ax.set_xlabel("mask budget p (% pixels)")
     ax.set_ylabel("Fidelity(p) components")
     ax.set_ylim(0, 1.05)
@@ -154,8 +171,9 @@ def fidelity_vs_budget(
     ax2.plot(p, np.asarray(p_actual_mean) * 100, "k--", label="p_actual")
     ax2.plot(p, p, color="0.5", ls=":", label="p_actual = p_budget")
     ax2.set_ylabel("p_actual (%)")
+    _style_axis(ax2)
     if p_star is not None:
-        ax.axvline(p_star * 100, color="crimson", ls="--", label=f"p* (τ=0.95) = {p_star*100:.2f}%")
+        ax.axvline(p_star * 100, color="crimson", ls="--", label=f"p* (τ={tau:g}) = {p_star*100:.2f}%")
     ax.set_title(title)
     ax.legend(loc="lower left", fontsize=8)
     fig.tight_layout()
@@ -171,6 +189,7 @@ def overlay_two_families(
     label_b: str,
     title: str,
     p_b: Optional[Sequence[float]] = None,
+    xscale: str = "log",
 ) -> None:
     fig, ax = plt.subplots(figsize=(7.5, 4.8))
     xa = np.asarray(p) * 100
@@ -180,7 +199,8 @@ def overlay_two_families(
         for name, (mean, std) in fam.items():
             ax.plot(xs, mean, ls=styles[lab], marker="o", label=f"{name} ({lab})")
             ax.fill_between(xs, np.asarray(mean) - std, np.asarray(mean) + std, alpha=0.12)
-    ax.set_xscale("log")
+    if xscale != "linear":
+        ax.set_xscale(xscale)
     ax.set_xlabel("mask size / budget p (% pixels)")
     ax.set_ylabel("Fidelity components")
     ax.set_ylim(0, 1.05)
@@ -250,6 +270,29 @@ def grouped_bars(
     ax.set_ylabel(ylabel)
     ax.set_title(title)
     ax.legend()
+    fig.tight_layout()
+    _save(fig, path)
+
+
+def triple_panel(
+    path: Path,
+    x_img: np.ndarray,
+    m_img: np.ndarray,
+    e_img: np.ndarray,
+    suptitle: str = "",
+    labels: Sequence[str] = ("x (original)", "m (mask)", "e (explanation)"),
+) -> None:
+    """Save x | mask | explanation side-by-side in one PNG."""
+    fig, axes = plt.subplots(1, 3, figsize=(7.5, 2.8))
+    for ax, img, lab in zip(axes, (x_img, m_img, e_img), labels):
+        ax.axis("off")
+        if img.ndim == 2:
+            ax.imshow(img, cmap="gray", vmin=0, vmax=1)
+        else:
+            ax.imshow(np.clip(img, 0, 1))
+        ax.set_title(lab, fontsize=8)
+    if suptitle:
+        fig.suptitle(suptitle, fontsize=9)
     fig.tight_layout()
     _save(fig, path)
 

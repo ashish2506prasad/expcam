@@ -52,8 +52,13 @@ def kl_divergence(logits_x: torch.Tensor, logits_e: torch.Tensor) -> float:
     return float(F.kl_div(log_p_e, p_x, reduction="batchmean").item())
 
 
+def exp_minus_kl(logits_x: torch.Tensor, logits_e: torch.Tensor) -> float:
+    """Fidelity KL component in (0, 1]: exp(−D_KL). Equals 1 when distributions match."""
+    return float(np.exp(-kl_divergence(logits_x, logits_e)))
+
+
 def normalized_kl(logits_x: torch.Tensor, logits_e: torch.Tensor) -> float:
-    """Map KL into [0, 1] via min(KL / log C, 1) so (1 - nKL) is a fidelity component."""
+    """Legacy: KL / log(C) capped at 1. Prefer exp_minus_kl for fidelity reporting."""
     c = logits_x.shape[1]
     nkl = kl_divergence(logits_x, logits_e) / max(np.log(c), 1e-8)
     return float(min(nkl, 1.0))
@@ -101,8 +106,15 @@ def fidelity_bundle(logits_x: torch.Tensor, logits_e: torch.Tensor) -> Dict[str,
     """Fidelity(p) as two reported components — not a weighted scalar."""
     return {
         "top1_agreement": top1_agreement(logits_x, logits_e),
-        "one_minus_normalized_kl": 1.0 - normalized_kl(logits_x, logits_e),
+        "exp_minus_kl": exp_minus_kl(logits_x, logits_e),
     }
+
+
+def fidelity_kl_component(row: Dict) -> float:
+    """Read KL fidelity from a metrics row (new or legacy runs)."""
+    if "exp_minus_kl" in row:
+        return float(row["exp_minus_kl"])
+    return float(row.get("one_minus_normalized_kl", 0.0))
 
 
 def evaluate_explanation(
@@ -140,6 +152,7 @@ def evaluate_explanation(
         "pred_x": int(y[0].item()),
         "pred_e": int(logits_e.argmax(dim=1)[0].item()),
         "kl_divergence": kl_divergence(logits_x, logits_e),
+        "exp_minus_kl": exp_minus_kl(logits_x, logits_e),
         "normalized_kl": normalized_kl(logits_x, logits_e),
         "one_minus_normalized_kl": 1.0 - normalized_kl(logits_x, logits_e),
         "ce": ce_on_original_label(logits_x, logits_e),
@@ -157,13 +170,14 @@ def min_sufficient_budget(
     tau: float,
     p_key: str = "p_budget",
 ) -> Optional[float]:
-    """Smallest budget at which both Fidelity components clear τ.
+    """Smallest budget at which both fidelity components clear τ.
 
-    This is the smallest mask *found by the optimizer*, not a provable global min.
+    Components: top1_agreement(p) ≥ τ AND exp(−KL(p)) ≥ τ.
+    This is the smallest mask budget *found by the optimizer*, not a provable global min.
     """
     ordered = sorted(rows_by_p, key=lambda r: r[p_key])
     for row in ordered:
-        if row["top1_agreement"] >= tau and row["one_minus_normalized_kl"] >= tau:
+        if row["top1_agreement"] >= tau and fidelity_kl_component(row) >= tau:
             return float(row[p_key])
     return None
 

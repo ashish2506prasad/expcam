@@ -23,9 +23,9 @@ ensure_pkg_path()
 
 from cli import add_common_args, resolve_run
 from classifiers import load_classifier, run_with_acts
-from config import AUG_BRIGHTNESS, AUG_ROT_DEG, AUG_TRANSLATE_FRAC, N_BG_DRAWS, DEFAULT_LAMBDAS
-from data import load_tensor, other_class_records, same_class_records
-from io_utils import mean_std, rows_to_excel, save_json
+from config import AUG_BRIGHTNESS, AUG_ROT_DEG, AUG_TRANSLATE_FRAC, N_BG_DRAWS, DEFAULT_LAMBDAS, figure_dir
+from data import load_tensor, other_class_records, same_class_records, qualitative_image_ids
+from io_utils import load_json, mean_std, rows_to_excel, save_json
 from metrics import (
     class_confidence,
     confidence_delta,
@@ -180,9 +180,31 @@ def run_section4(args) -> None:
     _figures(eval_set, images, args, rows_bg, device)
 
 
+def run_section4_figures_only(args) -> None:
+    """Regenerate Section 4 figures from saved JSON (no re-computation)."""
+    eval_set, images, device = resolve_run(args)
+    out_root = args.out / "section4"
+    js = out_root / "background_runs.json"
+    if not js.exists():
+        log("No section4/background_runs.json found — nothing to plot.")
+        return
+    rows_bg = load_json(js)
+    log(f"Figures-only: loaded {len(rows_bg)} background rows from disk")
+    _figures(eval_set, images, args, rows_bg, device)
+
+
 def _figures(eval_set, images, args, rows_bg, device) -> None:
-    fig_dir = args.out / "section4" / "figures"
-    backbone = args.backbones[0]
+    backbones = list(args.backbones) or sorted({r["backbone"] for r in rows_bg})
+    for backbone in backbones:
+        if not any(r["backbone"] == backbone for r in rows_bg):
+            log(f"[figures] skip {backbone}: no Section 4 runs")
+            continue
+        fig_dir = figure_dir(args.out, "section4", backbone)
+        log(f"[figures] {backbone} -> {fig_dir}")
+        _figures_for_backbone(eval_set, images, args, rows_bg, device, backbone, fig_dir)
+
+
+def _figures_for_backbone(eval_set, images, args, rows_bg, device, backbone, fig_dir) -> None:
     order = ["gaussian", "same_class", "cross_class"]
     means, stds = [], []
     for kind in order:
@@ -197,13 +219,12 @@ def _figures(eval_set, images, args, rows_bg, device) -> None:
         "robustness accuracy %",
         f"Fig E1 — background substitution ({backbone}, mean±std)",
     )
-    _fig_e4(eval_set, args, device, fig_dir)
+    _fig_e4(eval_set, args, device, fig_dir, backbone)
 
 
-def _fig_e4(eval_set, args, device, fig_dir) -> None:
-    qids = eval_set["qualitative_ids"][:4]
+def _fig_e4(eval_set, args, device, fig_dir, backbone) -> None:
+    qids = qualitative_image_ids(eval_set)
     id_to_rec = {r["id"]: r for r in eval_set["images"]}
-    backbone = args.backbones[0]
     bundle = load_classifier(backbone, device)
     rng = np.random.RandomState(0)
     rows = []
@@ -261,8 +282,16 @@ def _fig_e4(eval_set, args, device, fig_dir) -> None:
 def main(argv=None):
     p = add_common_args(argparse.ArgumentParser(description="Section 4: robustness"))
     p.add_argument("--n-draws", type=int, default=N_BG_DRAWS)
+    p.add_argument(
+        "--figures-only",
+        action="store_true",
+        help="Skip robustness runs; regenerate per-backbone figures from background_runs.json",
+    )
     args = p.parse_args(argv)
-    run_section4(args)
+    if args.figures_only:
+        run_section4_figures_only(args)
+    else:
+        run_section4(args)
 
 
 if __name__ == "__main__":
