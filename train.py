@@ -21,6 +21,7 @@ ensure_pkg_path()
 
 from classifiers import ClassifierBundle, run_with_acts
 from config import DEFAULT_LAMBDAS, LR, MASK_THRESH, ROB_K_BACKGROUNDS, SEED, STEPS, TEMPERATURE
+from metrics import confidence_delta, ef1_new_version, explanation_f1
 from losses import (
     abductive_loss,
     area_loss,
@@ -75,6 +76,12 @@ class TrainConfig:
     rob_k: int = ROB_K_BACKGROUNDS
     extra_backgrounds: Optional[Sequence[torch.Tensor]] = None
     log_every: int = 50  # 0 = silent; notebooks printed every 10 steps
+    no_ce: bool = False  # when True, CE loss is omitted from the training objective
+    record_ef1: bool = False
+    keep_best_ef1: bool = False  # return mask from the step with highest EF1
+    ef1_version: str = "legacy"  # "legacy" | "new" (ef1_new_version in metrics.py)
+    save_expl_steps: Optional[Sequence[int]] = None
+    save_expl_dir: Optional[str] = None
 
 
 @dataclass
@@ -90,6 +97,9 @@ class TrainResult:
     weight_curve: List[Dict[str, float]]
     mu_final: float
     p_actual: float
+    ef1_curve: List[Dict[str, float]] = field(default_factory=list)
+    best_ef1: float = 0.0
+    best_ef1_step: int = 0
 
 
 def train_mask(
@@ -107,6 +117,8 @@ def train_mask(
     if cfg.auto_balance == "uncertainty":
         # Kendall et al.: L = Σ exp(-s_i) L_i + s_i  (s_i = log-variance)
         keys = [k for k in cfg.lambdas if not (cfg.constraint is not None and k == "area")]
+        if cfg.no_ce:
+            keys = [k for k in keys if k != "ce"]
         s_params = nn.ParameterDict(
             {k: nn.Parameter(torch.zeros((), device=device)) for k in keys}
         )
@@ -117,6 +129,13 @@ def train_mask(
     mu = float(cfg.mu_init)
     curve: List[Dict[str, float]] = []
     wcurve: List[Dict[str, float]] = []
+    ef1_curve: List[Dict[str, float]] = []
+    save_expl_set = set(cfg.save_expl_steps or ())
+    track_ef1 = cfg.record_ef1 or cfg.keep_best_ef1
+    best_ef1 = -1.0
+    best_ef1_step = 0
+    best_mask_prob: Optional[torch.Tensor] = None
+    best_mask_hard: Optional[torch.Tensor] = None
 
     t0 = time.perf_counter()
     if cfg.log_every:
@@ -134,7 +153,7 @@ def train_mask(
         e = mask_st.expand_as(x) * x
 
         acts_e, logits_e = run_with_acts(bundle, e, require_grad=True)
-        loss_ce = ce_loss(logits_x, logits_e)
+        loss_ce = ce_loss(logits_x, logits_e) if not cfg.no_ce else x.new_zeros(())
         loss_kl = kl_loss(logits_x, logits_e, temperature=cfg.temperature)
         loss_act = x.new_zeros(())
         for name, w in bundle.layer_weights.items():
@@ -163,6 +182,9 @@ def train_mask(
         else:
             components_for_sum = components
 
+        if cfg.no_ce:
+            components_for_sum = {k: v for k, v in components_for_sum.items() if k != "ce"}
+
         if s_params is not None:
             loss_total = x.new_zeros(())
             for k, L in components_for_sum.items():
@@ -188,6 +210,36 @@ def train_mask(
                 viol = float(torch.relu(mask_prob.mean() - cfg.p_target).item())
             mu = max(0.0, mu + cfg.mu_eta * viol)
 
+        if track_ef1 or save_expl_set:
+            with torch.no_grad():
+                p_hard = (mask_prob > cfg.mask_thresh).float()
+                p_act = float(p_hard.mean().item())
+                d_conf = confidence_delta(logits_x, logits_e)
+                if cfg.ef1_version == "new":
+                    y = logits_x.argmax(dim=1)
+                    conf_e = float(
+                        torch.nn.functional.softmax(logits_e, dim=1)[0, y[0]].item()
+                    )
+                    ef1 = ef1_new_version(conf_e, p_act)
+                else:
+                    ef1 = explanation_f1(d_conf, p_act)
+                if track_ef1:
+                    ef1_curve.append(
+                        {
+                            "step": t,
+                            "ef1": ef1,
+                            "delta_conf": d_conf,
+                            "p_actual": p_act,
+                        }
+                    )
+                if cfg.keep_best_ef1 and ef1 >= best_ef1:
+                    best_ef1 = ef1
+                    best_ef1_step = t
+                    best_mask_prob = mask_prob.detach().clone()
+                    best_mask_hard = p_hard.detach().clone()
+                if t in save_expl_set and cfg.save_expl_dir:
+                    _save_expl_snapshot(x, p_hard, cfg.save_expl_dir, t, ef1, p_act, d_conf)
+
         if cfg.record_curve and (t % cfg.curve_every == 0 or t == 1 or t == cfg.steps):
             row = {k: float(v.detach().item()) for k, v in components.items()}
             row["total"] = float(loss_total.detach().item())
@@ -206,20 +258,35 @@ def train_mask(
                 p_now = float((mask_prob > cfg.mask_thresh).float().mean().item())
             log(
                 f"  step {t:>4d}/{cfg.steps}  total={loss_total.item():.3f}  "
-                f"act={loss_act.item():.3f}  ce={loss_ce.item():.3f}  kl={loss_kl.item():.3f}  "
+                f"act={loss_act.item():.3f}  "
+                + ("" if cfg.no_ce else f"ce={loss_ce.item():.3f}  ")
+                + f"kl={loss_kl.item():.3f}  "
                 f"area={loss_area.item():.3f}  bin={loss_bin.item():.3f}  tv={loss_tv.item():.4f}  "
                 f"rob={loss_rob.item():.3f}  p={100.0 * p_now:.1f}%  top1={'Y' if top1 else 'N'}"
             )
 
     seconds = time.perf_counter() - t0
-    mask_net.eval()
-    with torch.no_grad():
-        mask_prob = torch.sigmoid(mask_net(x))
-        if cfg.constraint == "project" and cfg.p_target is not None:
-            mask_prob = project_topk_mask(mask_prob, cfg.p_target)
-        mask_hard = (mask_prob > cfg.mask_thresh).float()
+    if cfg.keep_best_ef1 and best_mask_prob is not None and best_mask_hard is not None:
+        mask_prob = best_mask_prob
+        mask_hard = best_mask_hard
         e = mask_hard.expand_as(x) * x
         p_actual = float(mask_hard.mean().item())
+        if cfg.log_every:
+            log(
+                f"  best EF1={best_ef1:.4f} at step {best_ef1_step}  "
+                f"p_actual={100.0 * p_actual:.1f}%"
+            )
+    else:
+        mask_net.eval()
+        with torch.no_grad():
+            mask_prob = torch.sigmoid(mask_net(x))
+            if cfg.constraint == "project" and cfg.p_target is not None:
+                mask_prob = project_topk_mask(mask_prob, cfg.p_target)
+            mask_hard = (mask_prob > cfg.mask_thresh).float()
+            e = mask_hard.expand_as(x) * x
+            p_actual = float(mask_hard.mean().item())
+        best_ef1 = max((row["ef1"] for row in ef1_curve), default=0.0)
+        best_ef1_step = next((row["step"] for row in ef1_curve if row["ef1"] == best_ef1), 0)
 
     if cfg.log_every:
         log(f"  finished in {seconds:.1f}s  p_actual={100.0 * p_actual:.1f}%")
@@ -236,6 +303,30 @@ def train_mask(
         weight_curve=wcurve,
         mu_final=mu,
         p_actual=p_actual,
+        ef1_curve=ef1_curve,
+        best_ef1=float(best_ef1),
+        best_ef1_step=int(best_ef1_step),
+    )
+
+
+def _save_expl_snapshot(x, mask_hard, out_dir: str, step: int, ef1: float, p_act: float, d_conf: float) -> None:
+    from pathlib import Path
+
+    import numpy as np
+    from PIL import Image
+
+    from io_utils import ensure_dir
+    from viz import panel_expl, panel_mask, panel_original, triple_panel
+
+    dest = ensure_dir(Path(out_dir) / f"step_{step:04d}")
+    e_img = panel_expl(x, mask_hard)
+    Image.fromarray((np.clip(e_img, 0, 1) * 255).astype(np.uint8)).save(dest / "e.png")
+    triple_panel(
+        dest / "x_m_e.png",
+        panel_original(x),
+        panel_mask(mask_hard),
+        e_img,
+        suptitle=f"step={step}  EF1={ef1:.3f}  p={100*p_act:.1f}%  Δconf={d_conf:.3f}",
     )
 
 

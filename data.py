@@ -18,8 +18,11 @@ from PIL import Image
 
 from config import (
     DEFAULT_BACKBONES,
+    N_CLASSES,
     N_PER_CLASS,
     QUALITATIVE_PER_CLASS,
+    SECTION0_IMAGE_SLOTS,
+    SECTION0_PER_CLASS,
     SEED,
     TRAINX_CLASSES,
     add_where_args,
@@ -64,10 +67,11 @@ def build_eval_set(
     rng = np.random.RandomState(seed)
     images = []
     classes_present = [wnid for wnid in TRAINX_CLASSES if (root / wnid).is_dir()]
-    if len(classes_present) < 5:
+    if len(classes_present) < N_CLASSES:
         raise RuntimeError(
-            f"Need at least 5 classes in {root}; found {classes_present}"
+            f"Need at least {N_CLASSES} classes in {root}; found {len(classes_present)}: {classes_present}"
         )
+    classes_present = classes_present[:N_CLASSES]
     for class_i, wnid in enumerate(classes_present):
         files = list_class_images(root, wnid)
         if len(files) < n_per_class:
@@ -122,9 +126,18 @@ def load_eval_set(path: Optional[Path] = None) -> Dict:
     if not path.exists():
         return build_eval_set(path=path)
     data = load_json(path)
-    if data.get("n_per_class") != C.N_PER_CLASS:
+    expected_classes = [wnid for wnid in TRAINX_CLASSES if (C.TRAINX_DIR / wnid).is_dir()][
+        : C.N_CLASSES
+    ]
+    if (
+        data.get("n_per_class") != C.N_PER_CLASS
+        or data.get("n_classes") != C.N_CLASSES
+        or data.get("classes") != expected_classes
+    ):
         print(
-            f"Eval set has n_per_class={data.get('n_per_class')} but config has {C.N_PER_CLASS}; rebuilding."
+            f"Eval set has n_per_class={data.get('n_per_class')} n_classes={data.get('n_classes')} "
+            f"classes={data.get('classes')} but config wants {C.N_PER_CLASS}/{C.N_CLASSES}/"
+            f"{expected_classes}; rebuilding."
         )
         return build_eval_set(path=path, force=True)
     data["root"] = str(C.TRAINX_DIR)
@@ -153,6 +166,39 @@ def records_by_class(eval_set: Dict) -> Dict[str, List[Dict]]:
     out: Dict[str, List[Dict]] = {}
     for rec in eval_set["images"]:
         out.setdefault(rec["wnid"], []).append(rec)
+    return out
+
+
+def one_image_per_class(eval_set: Dict) -> List[Dict]:
+    """First eval image from each class."""
+    by_class = records_by_class(eval_set)
+    class_order = eval_set.get("classes") or sorted(by_class.keys())
+    out: List[Dict] = []
+    for wnid in class_order:
+        recs = by_class.get(wnid, [])
+        if recs:
+            out.append(recs[0])
+    return out
+
+
+def section0_image_records(
+    eval_set: Dict,
+    per_class: Optional[int] = None,
+    slots: Optional[Sequence[int]] = None,
+) -> List[Dict]:
+    """Section 0 subset: fixed slots per class (default 3rd & 6th, not qualitative 1st/2nd)."""
+    if per_class is None:
+        per_class = SECTION0_PER_CLASS
+    if slots is None:
+        slots = SECTION0_IMAGE_SLOTS
+    by_class = records_by_class(eval_set)
+    class_order = eval_set.get("classes") or sorted(by_class.keys())
+    out: List[Dict] = []
+    for wnid in class_order:
+        recs = by_class.get(wnid, [])
+        for slot in slots[:per_class]:
+            if slot < len(recs):
+                out.append(recs[slot])
     return out
 
 

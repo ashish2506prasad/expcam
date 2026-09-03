@@ -74,6 +74,8 @@ def maybe_train_and_eval(
         "mu_final": result.mu_final,
         "auto_balance": cfg.auto_balance,
         "p_actual": result.p_actual,
+        "best_ef1": result.best_ef1,
+        "best_ef1_step": result.best_ef1_step,
         **metrics,
         **(extra_metrics or {}),
     }
@@ -87,6 +89,8 @@ def maybe_train_and_eval(
         save_json(out_dir / "loss_curve.json", result.loss_curve)
     if result.weight_curve:
         save_json(out_dir / "weight_curve.json", result.weight_curve)
+    if result.ef1_curve:
+        save_json(out_dir / "ef1_curve.json", result.ef1_curve)
     save_mask_tensors(out_dir, result)
     save_json(
         out_dir / "train_meta.json",

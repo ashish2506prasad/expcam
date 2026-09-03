@@ -21,9 +21,16 @@ KAGGLE_RUNS = Path("/kaggle/working/expcam_runs")
 KAGGLE_WORKING = Path("/kaggle/working")
 
 SEED = 0
-N_IMAGES = 98  # 14 per class × 7 trainx classes (within the recommended 50–100)
-N_PER_CLASS = 14
+N_CLASSES = 13
+N_IMAGES = 91  # 7 per class × 13 trainx classes (bottleneck: n01749939 has 7)
+N_PER_CLASS = 7
 QUALITATIVE_PER_CLASS = 2  # images per class in Fig A11, B5, C4, E4, etc.
+SECTION0_PER_CLASS = 2  # Section 0 trains 2 images per class
+SECTION0_IMAGE_SLOTS = (2, 5)  # 3rd & 6th eval image (qualitative uses slots 0,1)
+SECTION0_STEPS = 800
+SECTION0_EF1_SNAPSHOT_START = 0
+SECTION0_EF1_SNAPSHOT_EVERY = 40
+SECTION3_EXP_STEPS = 800  # EXP-CAM training in Section 3; best-EF1 checkpoint saved
 IMAGE_SIZE = 224
 
 DEFAULT_BACKBONES = ("resnet18", "efficientnet_b0", "vit_b_16")
@@ -42,7 +49,8 @@ def figure_dir(out_root: Path, section: str, backbone: str) -> Path:
     return Path(out_root) / section / sub
 
 # Per-image U-Net training (AM6 cell 15 / AM4–AM5 full-model cells)
-STEPS = 400
+STEPS = 700
+SECTION1_STEPS = 300
 LR = 5e-5
 OPTIMIZER_NAME = "adam"
 TEMPERATURE = 2.0
@@ -60,10 +68,10 @@ DEFAULT_LAMBDAS = {
 }
 
 LOSS_TERMS = ("act", "ce", "kl", "area", "bin", "tv", "rob")
-SWEEP_TERMS = ("ce", "kl", "area", "bin", "tv", "rob")  # L_act stays fixed
-SWEEP_MULTS = (0.0, 0.1, 0.5, 1.0, 2.0, 5.0, 10.0)
 
 BUDGETS = (0.50, 0.30, 0.20, 0.10, 0.05, 0.02, 0.01, 0.005)
+# Section 2 knapsack sweep on Section 0 best mask_prob (fraction of pixels kept)
+KNAPSACK_BUDGETS = (0.005, 0.01, 0.02, 0.05, 0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40, 0.50)
 FIDELITY_TAUS = (0.95, 0.90, 1.0)
 P_TARGETS = (0.05, 0.10, 0.20)
 
@@ -81,24 +89,40 @@ GREY_BG = 0.5
 
 # ImageNet-1K synsets present in trainx/
 TRAINX_CLASSES = {
-    "n01440764": {"name": "tench", "imagenet_idx": 0},
     "n01484850": {"name": "great_white_shark", "imagenet_idx": 2},
     "n01494475": {"name": "hammerhead", "imagenet_idx": 4},
     "n01531178": {"name": "goldfinch", "imagenet_idx": 11},
     "n01632777": {"name": "axolotl", "imagenet_idx": 29},
     "n01665541": {"name": "leatherback_turtle", "imagenet_idx": 34},
     "n01687978": {"name": "agama", "imagenet_idx": 42},
+    "n01695060": {"name": "komodo_dragon", "imagenet_idx": 48},
+    "n01749939": {"name": "green_mamba", "imagenet_idx": 64},
+    "n01818515": {"name": "macaw", "imagenet_idx": 88},
+    "n01833805": {"name": "hummingbird", "imagenet_idx": 94},
+    "n02012849": {"name": "crane", "imagenet_idx": 134},
+    "n02018795": {"name": "bustard", "imagenet_idx": 138},
+    "n02037110": {"name": "oystercatcher", "imagenet_idx": 143},
 }
 
-# Dual-axis metric chosen per swept term (Section 1b / Figs A3–A8)
-SWEEP_SECONDARY_METRIC = {
-    "ce": "top1_agreement",
-    "kl": "kl_divergence",
-    "area": "top1_agreement",
-    "bin": "binarization_sharpness",
-    "tv": "tv_energy_per_pixel",
-    "rob": "top1_agreement",
-}
+
+def ef1_snapshot_steps(
+    start: int = SECTION0_EF1_SNAPSHOT_START,
+    every: int = SECTION0_EF1_SNAPSHOT_EVERY,
+    max_step: int = SECTION0_STEPS,
+) -> tuple[int, ...]:
+    """Steps at which to save explanation snapshots (40, 80, …, max_step)."""
+    return tuple(range(start + every, max_step + 1, every))
+
+
+def ef1_grid_steps(
+    every: int,
+    max_step: int = SECTION0_STEPS,
+    first: int | None = None,
+) -> tuple[int, ...]:
+    """Steps for Section 0 progression grids (40, 80, …, max_step)."""
+    if first is None:
+        first = every
+    return tuple(range(first, max_step + 1, every))
 
 N_BG_DRAWS = 5
 N_INSERT_STEPS = 50
@@ -183,11 +207,31 @@ def lambdas_with_overrides(**overrides) -> dict:
     return out
 
 
-def loo_configs() -> dict:
-    """Full model plus seven leave-one-out coefficient sets."""
-    cfgs = {"Full": dict(DEFAULT_LAMBDAS)}
-    for term in LOSS_TERMS:
-        lam = dict(DEFAULT_LAMBDAS)
-        lam[term] = 0.0
-        cfgs[f"-L_{term}"] = lam
+def sequential_configs() -> dict:
+    """Cumulative loss addition ending with the full model (+ L_rob)."""
+    zero = {k: 0.0 for k in DEFAULT_LAMBDAS}
+    cfgs = {}
+
+    lam = dict(zero)
+    lam["act"] = DEFAULT_LAMBDAS["act"]
+    cfgs["seq_act"] = lam
+
+    lam = dict(cfgs["seq_act"])
+    lam["kl"] = DEFAULT_LAMBDAS["kl"]
+    cfgs["seq_act_kl"] = lam
+
+    lam = dict(cfgs["seq_act_kl"])
+    lam["ce"] = DEFAULT_LAMBDAS["ce"]
+    cfgs["seq_act_kl_ce"] = lam
+
+    lam = dict(cfgs["seq_act_kl_ce"])
+    lam["area"] = DEFAULT_LAMBDAS["area"]
+    lam["bin"] = DEFAULT_LAMBDAS["bin"]
+    lam["tv"] = DEFAULT_LAMBDAS["tv"]
+    cfgs["seq_act_kl_ce_min"] = lam
+
+    cfgs["Full"] = dict(DEFAULT_LAMBDAS)
     return cfgs
+
+
+SEQUENTIAL_PLOT_ORDER = ["seq_act", "seq_act_kl", "seq_act_kl_ce", "seq_act_kl_ce_min", "Full"]

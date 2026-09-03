@@ -121,6 +121,12 @@ def eigen_cam(bundle: ClassifierBundle, x: torch.Tensor, class_idx: Optional[int
     return _library_cam(EigenCAM, bundle, x, class_idx)
 
 
+def score_cam(bundle: ClassifierBundle, x: torch.Tensor, class_idx: Optional[int] = None) -> torch.Tensor:
+    from pytorch_grad_cam import ScoreCAM
+
+    return _library_cam(ScoreCAM, bundle, x, class_idx)
+
+
 @torch.no_grad()
 def vit_attention_map(bundle: ClassifierBundle, x: torch.Tensor) -> torch.Tensor:
     """CLS-to-patch attention of the last ViT block (ViT-only attention baseline)."""
@@ -175,16 +181,18 @@ def rise(
     return cam / (cam.max() + 1e-12)
 
 
-BASELINE_NAMES = ("gradcam", "gradcam++", "layercam", "attention", "rise")
+BASELINE_NAMES = ("gradcam++", "layercam", "scorecam", "eigencam", "attention", "rise")
 
 
 def compute_heatmap(name: str, bundle: ClassifierBundle, x: torch.Tensor, rise_masks: int = 800) -> Optional[torch.Tensor]:
-    if name == "gradcam":
-        return grad_cam(bundle, x)
     if name == "gradcam++":
         return grad_cam_pp(bundle, x)
     if name == "layercam":
         return layer_cam(bundle, x)
+    if name == "scorecam":
+        return score_cam(bundle, x)
+    if name == "eigencam":
+        return eigen_cam(bundle, x)
     if name == "attention":
         if not bundle.cam_is_vit:
             return None

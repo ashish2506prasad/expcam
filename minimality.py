@@ -22,21 +22,23 @@ ensure_pkg_path()
 
 from cli import add_common_args, resolve_run
 from classifiers import load_classifier
-from config import BUDGETS, DEFAULT_LAMBDAS, FIDELITY_TAUS, figure_dir
-from data import load_tensor, qualitative_image_ids
-from io_utils import load_json, mean_std, rows_to_excel, save_json
-from metrics import fidelity_kl_component, min_sufficient_budget
-from runner import maybe_train_and_eval, run_dir
+from config import BUDGETS, DEFAULT_LAMBDAS, FIDELITY_TAUS, KNAPSACK_BUDGETS, figure_dir
+from data import load_tensor, one_image_per_class, qualitative_image_ids
+from io_utils import ensure_dir, load_json, mean_std, rows_to_excel, save_json
+from metrics import ef1_new_version, evaluate_explanation, fidelity_kl_component, min_sufficient_budget
+from runner import load_masks, maybe_train_and_eval, run_dir
+from baselines import topk_binarize
 from train import TrainConfig, image_seed, log
 from viz import (
     boxplot,
     caption,
     fidelity_vs_budget,
     image_grid,
-    overlay_two_families,
+    metric_vs_budget,
     panel_expl,
     panel_mask,
     panel_original,
+    step_progression_grid,
     triple_panel,
 )
 
@@ -90,6 +92,7 @@ def run_section2(args) -> None:
                     constraint=constraint,
                     p_target=p,
                     log_every=args.log_every,
+                    no_ce=args.no_ce,
                 )
                 row = maybe_train_and_eval(
                     bundle,
@@ -111,18 +114,10 @@ def run_section2(args) -> None:
                 save_json(out_dir / "metrics.json", row)
                 rows_2b.append(row)
 
-    # 2A: load λ_area sweep from section 1 if present
+    # 2A (λ_area sweep) removed — Section 1 no longer runs sweeps.
     rows_2a = []
-    s1 = out_root / "section1" / "all_runs.json"
-    if s1.exists():
-        for r in load_json(s1):
-            if r.get("protocol") == "sweep" and r.get("term") == "area":
-                r = dict(r)
-                r["p_budget"] = r["p_actual"]
-                rows_2a.append(r)
 
     save_json(out_root / section / "budget_runs.json", rows_2b)
-    save_json(out_root / section / "area_sweep_reuse.json", rows_2a)
 
     pstar_rows = []
     for backbone in args.backbones:
@@ -166,9 +161,9 @@ def run_section2(args) -> None:
     save_json(out_root / section / "p_star_summary.json", pstar_summary)
     rows_to_excel(
         out_root / section / "section2_results.xlsx",
-        {"budget": rows_2b, "area_sweep_2A": rows_2a, "p_star": pstar_rows, "p_star_summary": pstar_summary},
+        {"budget": rows_2b, "p_star": pstar_rows, "p_star_summary": pstar_summary},
     )
-    _figures(eval_set, images, args, rows_2a, rows_2b, pstar_rows, device, budgets)
+    _figures(eval_set, images, args, rows_2b, pstar_rows, device, budgets)
 
 
 def run_section2_figures_only(args) -> None:
@@ -176,14 +171,13 @@ def run_section2_figures_only(args) -> None:
     eval_set, images, device = resolve_run(args)
     section = args.out / "section2"
     rows_2b = load_json(section / "budget_runs.json") if (section / "budget_runs.json").exists() else []
-    rows_2a = load_json(section / "area_sweep_reuse.json") if (section / "area_sweep_reuse.json").exists() else []
     pstar_rows = load_json(section / "p_star.json") if (section / "p_star.json").exists() else []
     if not rows_2b:
         log("No section2/budget_runs.json — run Section 2 training first.")
         return
     budgets = sorted({r["p_budget"] for r in rows_2b})
     log(f"Figures-only: {len(rows_2b)} budget runs, backbones={sorted({r['backbone'] for r in rows_2b})}")
-    _figures(eval_set, images, args, rows_2a, rows_2b, pstar_rows, device, budgets)
+    _figures(eval_set, images, args, rows_2b, pstar_rows, device, budgets)
 
 
 def export_section2_gallery(args) -> None:
@@ -262,7 +256,7 @@ def _series_for(rows, backbone, p_values, key, p_field="p_budget"):
     return means, stds
 
 
-def _figures(eval_set, images, args, rows_2a, rows_2b, pstar_rows, device, budgets) -> None:
+def _figures(eval_set, images, args, rows_2b, pstar_rows, device, budgets) -> None:
     p_list = list(budgets)
     fid_keys = ("top1_agreement", "exp_minus_kl")
     backbones = list(args.backbones)
@@ -284,60 +278,16 @@ def _figures(eval_set, images, args, rows_2a, rows_2b, pstar_rows, device, budge
                 if r["backbone"] == backbone and r["tau"] == tau and r["p_star"] is not None
             ]
             p_star_mean = float(sum(pstars) / len(pstars)) if pstars else None
-            for suffix, xscale in (("_log", "log"), ("_linear", "linear")):
-                fidelity_vs_budget(
-                    fig_dir / f"FigB1_minimality_curve_tau{tau:g}{suffix}.png",
-                    p_list,
-                    series,
-                    pa_m,
-                    pa_s,
-                    p_star_mean,
-                    f"Fig B1 — Fidelity vs budget ({backbone}, τ={tau:g}). p* is optimizer-found, not a global min.",
-                    xscale=xscale,
-                    tau=tau,
-                )
-
-        rows_2a_bb = [r for r in rows_2a if r.get("backbone") == backbone]
-        if rows_2a_bb:
-            from collections import defaultdict as dd
-
-            by_mult = dd(list)
-            for r in rows_2a_bb:
-                by_mult[float(r.get("mult", r.get("lambda_value", 0)))].append(r)
-            fam_a = {k: ([], []) for k in fid_keys}
-            p_a = []
-            for mult in sorted(by_mult):
-                grp = by_mult[mult]
-                p_a.append(float(np.mean([g["p_actual"] for g in grp])))
-                for k in fid_keys:
-                    if k == "exp_minus_kl":
-                        vals = [fidelity_kl_component(g) for g in grp]
-                    else:
-                        vals = [g[k] for g in grp]
-                    s = mean_std(vals)
-                    fam_a[k][0].append(s["mean"] or 0)
-                    fam_a[k][1].append(s["std"] or 0)
-            fam_b = {k: _series_for(rows_2b, backbone, p_list, k) for k in fid_keys}
-            for suffix, xscale in (("_log", "log"), ("_linear", "linear")):
-                overlay_two_families(
-                    fig_dir / f"FigB2_2A_vs_2B{suffix}.png",
-                    p_list,
-                    fam_b,
-                    fam_a,
-                    "2B budget constraint",
-                    "2A λ_area sweep (x = achieved p_actual)",
-                    f"Fig B2 — 2A vs 2B ({backbone})"
-                    + (" (log x)" if xscale != "linear" else " (linear x)"),
-                    p_b=p_a,
-                    xscale=xscale,
-                )
-            save_json(
-                fig_dir / "figB2_2A_points.json",
-                {
-                    "backbone": backbone,
-                    "p_actual_mean": p_a,
-                    "family_2A": {k: {"mean": fam_a[k][0], "std": fam_a[k][1]} for k in fid_keys},
-                },
+            fidelity_vs_budget(
+                fig_dir / f"FigB1_minimality_curve_tau{tau:g}.png",
+                p_list,
+                series,
+                pa_m,
+                pa_s,
+                p_star_mean,
+                f"Fig B1 — Fidelity vs budget ({backbone}, τ={tau:g}). p* is optimizer-found, not a global min.",
+                xscale="linear",
+                tau=tau,
             )
 
         for tau in FIDELITY_TAUS:
@@ -385,6 +335,187 @@ def _fig_b5(eval_set, args, device, fig_dir, budgets, backbone) -> None:
         )
 
 
+def _section0_run_dir(out_root: Path, section0_source: str, backbone: str, image_id: str) -> Path:
+    return out_root / section0_source / backbone / "ef1_full" / image_id
+
+
+def _knapsack_mask_at_budget(mask_prob, p_budget: float):
+    """Top-k binarize mask_prob to exactly p_budget fraction (0–1 knapsack / greedy top-k)."""
+    scores = mask_prob[0, 0] if mask_prob.dim() == 4 else mask_prob.squeeze()
+    n = scores.numel()
+    k = max(1, int(round(float(p_budget) * n)))
+    hard = topk_binarize(scores, k).view(1, 1, *scores.shape[-2:])
+    return hard, k
+
+
+def _eval_knapsack_point(bundle, x, mask_prob, p_budget: float, device) -> dict:
+    mask_hard, k = _knapsack_mask_at_budget(mask_prob, p_budget)
+    met = evaluate_explanation(bundle, x, mask_hard.to(device), mask_prob=mask_prob)
+    ef1 = ef1_new_version(met["conf_e"], met["p_actual"])
+    return {
+        "p_budget": float(p_budget),
+        "p_budget_pct": 100.0 * float(p_budget),
+        "k_pixels": int(k),
+        "p_actual": met["p_actual"],
+        "p_actual_pct": met["p_actual_pct"],
+        "abs_confidence_delta": met["abs_confidence_delta"],
+        "kl_divergence": met["kl_divergence"],
+        "ef1": ef1,
+        "conf_e": met["conf_e"],
+        "top1_agreement": met["top1_agreement"],
+    }
+
+
+def run_section2_knapsack(args) -> None:
+    """Section 2 knapsack: sweep p on Section 0 best mask_prob (no retrain)."""
+    eval_set, _images, device = resolve_run(args)
+    out_root = args.out
+    section0_source = args.section0_source
+    budgets = tuple(args.knapsack_budgets) if args.knapsack_budgets else KNAPSACK_BUDGETS
+    subset = one_image_per_class(eval_set)
+    section = "section2"
+    rows = []
+
+    log(
+        f"Section 2 knapsack  device={device}  section0={section0_source}  "
+        f"images={len(subset)}  budgets={[f'{100*b:g}%' for b in budgets]}"
+    )
+
+    for backbone in args.backbones:
+        bundle = load_classifier(backbone, device)
+        for rec in subset:
+            s0_dir = _section0_run_dir(out_root, section0_source, backbone, rec["id"])
+            if not (s0_dir / "masks.pt").exists():
+                log(f"[skip] {backbone} img={rec['id']}: no Section 0 masks at {s0_dir}")
+                continue
+            s0_met = load_json(s0_dir / "metrics.json") if (s0_dir / "metrics.json").exists() else {}
+            p_model_pct = float(s0_met.get("p_actual_pct", 100.0 * s0_met.get("p_actual", 0.0)))
+            _, mask_prob = load_masks(s0_dir, device)
+            x = load_tensor(rec, bundle.preprocess, device, root=Path(eval_set["root"]))
+            log(f"[knapsack] {backbone} img={rec['id']} {rec['class_name']}  model p={p_model_pct:.1f}%")
+            for p in budgets:
+                pt = _eval_knapsack_point(bundle, x, mask_prob, p, device)
+                rows.append(
+                    {
+                        "image_id": rec["id"],
+                        "wnid": rec["wnid"],
+                        "class_name": rec["class_name"],
+                        "backbone": backbone,
+                        "section0_source": section0_source,
+                        "p_model_pct": p_model_pct,
+                        "best_ef1_step": s0_met.get("best_ef1_step"),
+                        "protocol": "knapsack_section0",
+                        **pt,
+                    }
+                )
+
+    if not rows:
+        log("No knapsack rows computed — run Section 0 with --ef1-new-version first.")
+        return
+
+    save_json(out_root / section / "knapsack_runs.json", rows)
+    rows_to_excel(out_root / section / "section2_knapsack_results.xlsx", {"knapsack": rows})
+    _figures_knapsack(args, eval_set, subset, rows, budgets, device)
+
+
+def run_section2_knapsack_figures_only(args) -> None:
+    eval_set, _, device = resolve_run(args)
+    js = args.out / "section2" / "knapsack_runs.json"
+    if not js.exists():
+        log("No section2/knapsack_runs.json — run Section 2 knapsack first.")
+        return
+    rows = load_json(js)
+    budgets = sorted({r["p_budget"] for r in rows})
+    subset = one_image_per_class(eval_set)
+    log(f"Knapsack figures-only: {len(rows)} rows")
+    _figures_knapsack(args, eval_set, subset, rows, budgets, device)
+
+
+def _figures_knapsack(args, eval_set, subset, rows, budgets, device) -> None:
+    """Per-image plots: p vs |Δconf|, KL, EF1 (linear x-axis only)."""
+    metrics = (
+        ("abs_conf_delta", "abs_confidence_delta", "|Δconf|"),
+        ("kl_divergence", "kl_divergence", "KL divergence"),
+        ("ef1", "ef1", "EF1 score"),
+    )
+    backbones = list(args.backbones) or sorted({r["backbone"] for r in rows})
+
+    for backbone in backbones:
+        out_dir = ensure_dir(_figure_dir(args.out, backbone))
+        n_plots = 0
+        for rec in subset:
+            qid = rec["id"]
+            img_rows = sorted(
+                [r for r in rows if r["backbone"] == backbone and r["image_id"] == qid],
+                key=lambda r: r["p_budget"],
+            )
+            if not img_rows:
+                continue
+            p_model_pct = float(img_rows[0].get("p_model_pct", 0.0))
+            p_fracs = [r["p_budget"] for r in img_rows]
+            cname = rec["class_name"]
+            for fname, key, ylabel in metrics:
+                vals = [r[key] for r in img_rows]
+                metric_vs_budget(
+                    out_dir / f"{fname}_{qid}.png",
+                    p_fracs,
+                    vals,
+                    ylabel=ylabel,
+                    title=f"{ylabel} vs mask budget — {cname} ({backbone}, img {qid})",
+                    p_model_pct=p_model_pct,
+                    xscale="linear",
+                )
+                n_plots += 1
+        log(f"[figures] {backbone}: {n_plots} knapsack plots -> {out_dir}")
+
+    _figures_knapsack_mask_grids(args, eval_set, subset, rows, budgets, device)
+
+
+def _chunk_panels(panels: list, cols_per_row: int) -> list:
+    out = []
+    for i in range(0, len(panels), cols_per_row):
+        out.append(panels[i : i + cols_per_row])
+    return out
+
+
+def _figures_knapsack_mask_grids(args, eval_set, subset, rows, budgets, device) -> None:
+    """One mask grid per image per backbone; panel caption is p= only."""
+    section0_source = args.section0_source
+    grid_backbones = [bb for bb in ("resnet18", "vit_b_16") if any(r["backbone"] == bb for r in rows)]
+    if args.backbones:
+        grid_backbones = [bb for bb in grid_backbones if bb in args.backbones]
+    if not grid_backbones:
+        grid_backbones = sorted({r["backbone"] for r in rows})
+
+    cols_per_row = int(getattr(args, "knapsack_grid_cols", 6) or 6)
+    bundles = {bb: load_classifier(bb, device) for bb in grid_backbones}
+    n_saved = 0
+
+    for backbone in grid_backbones:
+        out_dir = ensure_dir(_figure_dir(args.out, backbone) / "mask_grids")
+        bundle = bundles[backbone]
+        for rec in subset:
+            qid = rec["id"]
+            cname = rec["class_name"].replace(" ", "_")
+            s0_dir = _section0_run_dir(args.out, section0_source, backbone, qid)
+            if not (s0_dir / "masks.pt").exists():
+                continue
+            _, mask_prob = load_masks(s0_dir, device)
+            x = load_tensor(rec, bundle.preprocess, device, root=Path(eval_set["root"]))
+            panels = []
+            for p in budgets:
+                mask_hard, _ = _knapsack_mask_at_budget(mask_prob, p)
+                panels.append((panel_expl(x, mask_hard.to(device)), f"p={100 * p:g}%"))
+            grid_rows = _chunk_panels(panels, cols_per_row)
+            step_progression_grid(
+                out_dir / f"mask_grid_{qid}_{cname}.png",
+                grid_rows,
+            )
+            n_saved += 1
+
+    log(f"[figures] mask grids: {n_saved} ({len(grid_backbones)} backbones × images) -> figures_*/mask_grids/")
+
+
 def main(argv=None):
     p = add_common_args(argparse.ArgumentParser(description="Section 2: minimality"))
     p.add_argument("--constraint", choices=("project", "lagrangian"), default="project")
@@ -411,8 +542,30 @@ def main(argv=None):
         default=None,
         help="Budget subset for gallery export (default: all budgets in budget_runs.json)",
     )
+    p.add_argument(
+        "--from-section0-knapsack",
+        action="store_true",
+        help="Knapsack sweep on Section 0 best mask_prob (no retrain); write knapsack plots.",
+    )
+    p.add_argument(
+        "--section0-source",
+        default="section0_new_score",
+        help="Section 0 run folder under --out (default: section0_new_score).",
+    )
+    p.add_argument(
+        "--knapsack-budgets",
+        nargs="+",
+        type=float,
+        default=None,
+        help="Mask budgets for knapsack sweep as fractions (default: 0.005…0.50).",
+    )
     args = p.parse_args(argv)
-    if args.export_gallery:
+    if args.from_section0_knapsack:
+        if args.figures_only:
+            run_section2_knapsack_figures_only(args)
+        else:
+            run_section2_knapsack(args)
+    elif args.export_gallery:
         export_section2_gallery(args)
     elif args.figures_only:
         run_section2_figures_only(args)

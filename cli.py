@@ -92,6 +92,11 @@ def add_common_args(p: argparse.ArgumentParser) -> argparse.ArgumentParser:
         default=50,
         help="Print loss every N U-Net steps (0 = silent). Notebooks used 10.",
     )
+    p.add_argument(
+        "--no-ce",
+        action="store_true",
+        help="Omit cross-entropy (CE) loss from U-Net training (all backbones).",
+    )
     return p
 
 

@@ -1,4 +1,4 @@
-"""Put this folder on sys.path so `python section1_ablation.py` works on Kaggle.
+"""Put this folder on sys.path so `python ablation.py` works on Kaggle.
 
 The GitHub repo is often cloned as `exp-cam`, so `python -m expcam` and
 `from expcam.cli import ...` both fail there. Inserting this directory lets

@@ -2,7 +2,7 @@
 
 Also works as a script on Kaggle:
     python __main__.py 1 --where kaggle
-    python section1_ablation.py --where kaggle
+    python ablation.py --where kaggle
 """
 
 from __future__ import annotations
@@ -16,42 +16,28 @@ except ImportError:
 
 ensure_pkg_path()
 
-USAGE = """EXP-CAM revision experiments
+USAGE = """EXP-CAM experiments
 
 Local (from the folder that contains trainx/ and expcam/):
-  python -m expcam eval-set --where local
-  python -m expcam 1 --where local [--quick]
+  python -m expcam eval-set --where local --force --out expcam_runs_wo_ce
+  python -m expcam 1 --where local --out expcam_runs_wo_ce --backbones resnet18 vit_b_16
+  python -m expcam 2 --from-section0-knapsack --where local --out expcam_runs_wo_ce
+  python -m expcam 3 --where local --out expcam_runs_wo_ce --backbones resnet18 vit_b_16
 
-Kaggle (from the cloned exp-cam folder):
-  python __main__.py eval-set --where kaggle
-  python section1_ablation.py --where kaggle
-  python __main__.py 1 --where kaggle [--quick]
+See expcam/README.md for full Section 1–3 instructions.
 
-  --where kaggle uses
-    /kaggle/input/datasets/meashish2003/trainx/trainx
-    /kaggle/working/expcam_runs
-  Override with --data-root / --out if those paths differ.
-
---where auto (default): kaggle if /kaggle exists, else local.
-
-Every section reuses eval_set.json under the runs directory.
-JSON + Excel intermediates are written under <runs>/sectionN/.
+Every experiment reuses eval_set.json under the runs directory.
 """
 
 
 _SECTION_MODS = {
-    "1": "section1_ablation",
-    "2": "section2_minimality",
-    "3": "section3_baselines",
-    "4": "section4_robustness",
-    "5": "section5_auto_weights",
-    "6": "section6_llm",
-    "section1": "section1_ablation",
-    "section2": "section2_minimality",
-    "section3": "section3_baselines",
-    "section4": "section4_robustness",
-    "section5": "section5_auto_weights",
-    "section6": "section6_llm",
+    "0": "ef1",
+    "1": "ablation",
+    "2": "minimality",
+    "3": "comparisons",
+    "4": "robustness",
+    "5": "auto_weights",
+    "6": "llm",
 }
 
 
@@ -65,7 +51,7 @@ def main(argv=None):
         print(USAGE)
         return
     cmd, rest = argv[0], argv[1:]
-    if cmd in ("eval-set", "eval_set", "0"):
+    if cmd in ("eval-set", "eval_set"):
         from data import main as data_main
 
         data_main(rest)
@@ -74,7 +60,7 @@ def main(argv=None):
         from data import main as data_main
 
         data_main(rest)
-        for key in ("1", "2", "3", "4", "5", "6"):
+        for key in ("1", "2", "3"):
             modname = _SECTION_MODS[key]
             print(f"\n===== Section {key} =====")
             getattr(_load(modname), "main")(rest)
