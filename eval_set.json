@@ -1,0 +1,1787 @@
+{
+  "seed": 0,
+  "root": "/kaggle/input/datasets/meashish2003/trainx/trainX1_subset",
+  "n_per_class": 10,
+  "n_images": 190,
+  "n_classes": 19,
+  "classes": [
+    "n01484850",
+    "n01494475",
+    "n01531178",
+    "n01632777",
+    "n01665541",
+    "n01687978",
+    "n01695060",
+    "n01749939",
+    "n01818515",
+    "n01833805",
+    "n02012849",
+    "n02018795",
+    "n02037110",
+    "n01914609",
+    "n01924916",
+    "n01930112",
+    "n01950731",
+    "n01978455",
+    "n01984695"
+  ],
+  "backbones": [
+    "resnet18",
+    "efficientnet_b0",
+    "vit_b_16"
+  ],
+  "qualitative_ids": [
+    "000",
+    "001",
+    "010",
+    "011",
+    "020",
+    "021",
+    "030",
+    "031",
+    "040",
+    "041",
+    "050",
+    "051",
+    "060",
+    "061",
+    "070",
+    "071",
+    "080",
+    "081",
+    "090",
+    "091",
+    "100",
+    "101",
+    "110",
+    "111",
+    "120",
+    "121",
+    "130",
+    "131",
+    "140",
+    "141",
+    "150",
+    "151",
+    "160",
+    "161",
+    "170",
+    "171",
+    "180",
+    "181"
+  ],
+  "curve_image_id": "000",
+  "images": [
+    {
+      "id": "000",
+      "relpath": "n01484850/n01484850_17805.JPEG",
+      "wnid": "n01484850",
+      "class_name": "great_white_shark",
+      "imagenet_idx": 2,
+      "class_slot": 0,
+      "filename": "n01484850_17805.JPEG"
+    },
+    {
+      "id": "001",
+      "relpath": "n01484850/n01484850_18566.JPEG",
+      "wnid": "n01484850",
+      "class_name": "great_white_shark",
+      "imagenet_idx": 2,
+      "class_slot": 0,
+      "filename": "n01484850_18566.JPEG"
+    },
+    {
+      "id": "002",
+      "relpath": "n01484850/n01484850_21914.JPEG",
+      "wnid": "n01484850",
+      "class_name": "great_white_shark",
+      "imagenet_idx": 2,
+      "class_slot": 0,
+      "filename": "n01484850_21914.JPEG"
+    },
+    {
+      "id": "003",
+      "relpath": "n01484850/n01484850_2265.JPEG",
+      "wnid": "n01484850",
+      "class_name": "great_white_shark",
+      "imagenet_idx": 2,
+      "class_slot": 0,
+      "filename": "n01484850_2265.JPEG"
+    },
+    {
+      "id": "004",
+      "relpath": "n01484850/n01484850_23908.JPEG",
+      "wnid": "n01484850",
+      "class_name": "great_white_shark",
+      "imagenet_idx": 2,
+      "class_slot": 0,
+      "filename": "n01484850_23908.JPEG"
+    },
+    {
+      "id": "005",
+      "relpath": "n01484850/n01484850_24889.JPEG",
+      "wnid": "n01484850",
+      "class_name": "great_white_shark",
+      "imagenet_idx": 2,
+      "class_slot": 0,
+      "filename": "n01484850_24889.JPEG"
+    },
+    {
+      "id": "006",
+      "relpath": "n01484850/n01484850_6574.JPEG",
+      "wnid": "n01484850",
+      "class_name": "great_white_shark",
+      "imagenet_idx": 2,
+      "class_slot": 0,
+      "filename": "n01484850_6574.JPEG"
+    },
+    {
+      "id": "007",
+      "relpath": "n01484850/n01484850_6638.JPEG",
+      "wnid": "n01484850",
+      "class_name": "great_white_shark",
+      "imagenet_idx": 2,
+      "class_slot": 0,
+      "filename": "n01484850_6638.JPEG"
+    },
+    {
+      "id": "008",
+      "relpath": "n01484850/n01484850_8095.JPEG",
+      "wnid": "n01484850",
+      "class_name": "great_white_shark",
+      "imagenet_idx": 2,
+      "class_slot": 0,
+      "filename": "n01484850_8095.JPEG"
+    },
+    {
+      "id": "009",
+      "relpath": "n01484850/n01484850_8163.JPEG",
+      "wnid": "n01484850",
+      "class_name": "great_white_shark",
+      "imagenet_idx": 2,
+      "class_slot": 0,
+      "filename": "n01484850_8163.JPEG"
+    },
+    {
+      "id": "010",
+      "relpath": "n01494475/n01494475_10250.JPEG",
+      "wnid": "n01494475",
+      "class_name": "hammerhead",
+      "imagenet_idx": 4,
+      "class_slot": 1,
+      "filename": "n01494475_10250.JPEG"
+    },
+    {
+      "id": "011",
+      "relpath": "n01494475/n01494475_15549.JPEG",
+      "wnid": "n01494475",
+      "class_name": "hammerhead",
+      "imagenet_idx": 4,
+      "class_slot": 1,
+      "filename": "n01494475_15549.JPEG"
+    },
+    {
+      "id": "012",
+      "relpath": "n01494475/n01494475_1929.JPEG",
+      "wnid": "n01494475",
+      "class_name": "hammerhead",
+      "imagenet_idx": 4,
+      "class_slot": 1,
+      "filename": "n01494475_1929.JPEG"
+    },
+    {
+      "id": "013",
+      "relpath": "n01494475/n01494475_19831.JPEG",
+      "wnid": "n01494475",
+      "class_name": "hammerhead",
+      "imagenet_idx": 4,
+      "class_slot": 1,
+      "filename": "n01494475_19831.JPEG"
+    },
+    {
+      "id": "014",
+      "relpath": "n01494475/n01494475_21035.JPEG",
+      "wnid": "n01494475",
+      "class_name": "hammerhead",
+      "imagenet_idx": 4,
+      "class_slot": 1,
+      "filename": "n01494475_21035.JPEG"
+    },
+    {
+      "id": "015",
+      "relpath": "n01494475/n01494475_25767.JPEG",
+      "wnid": "n01494475",
+      "class_name": "hammerhead",
+      "imagenet_idx": 4,
+      "class_slot": 1,
+      "filename": "n01494475_25767.JPEG"
+    },
+    {
+      "id": "016",
+      "relpath": "n01494475/n01494475_3395.JPEG",
+      "wnid": "n01494475",
+      "class_name": "hammerhead",
+      "imagenet_idx": 4,
+      "class_slot": 1,
+      "filename": "n01494475_3395.JPEG"
+    },
+    {
+      "id": "017",
+      "relpath": "n01494475/n01494475_547.JPEG",
+      "wnid": "n01494475",
+      "class_name": "hammerhead",
+      "imagenet_idx": 4,
+      "class_slot": 1,
+      "filename": "n01494475_547.JPEG"
+    },
+    {
+      "id": "018",
+      "relpath": "n01494475/n01494475_7323.JPEG",
+      "wnid": "n01494475",
+      "class_name": "hammerhead",
+      "imagenet_idx": 4,
+      "class_slot": 1,
+      "filename": "n01494475_7323.JPEG"
+    },
+    {
+      "id": "019",
+      "relpath": "n01494475/n01494475_8259.JPEG",
+      "wnid": "n01494475",
+      "class_name": "hammerhead",
+      "imagenet_idx": 4,
+      "class_slot": 1,
+      "filename": "n01494475_8259.JPEG"
+    },
+    {
+      "id": "020",
+      "relpath": "n01531178/n01531178_11916.JPEG",
+      "wnid": "n01531178",
+      "class_name": "goldfinch",
+      "imagenet_idx": 11,
+      "class_slot": 2,
+      "filename": "n01531178_11916.JPEG"
+    },
+    {
+      "id": "021",
+      "relpath": "n01531178/n01531178_14416.JPEG",
+      "wnid": "n01531178",
+      "class_name": "goldfinch",
+      "imagenet_idx": 11,
+      "class_slot": 2,
+      "filename": "n01531178_14416.JPEG"
+    },
+    {
+      "id": "022",
+      "relpath": "n01531178/n01531178_19647.JPEG",
+      "wnid": "n01531178",
+      "class_name": "goldfinch",
+      "imagenet_idx": 11,
+      "class_slot": 2,
+      "filename": "n01531178_19647.JPEG"
+    },
+    {
+      "id": "023",
+      "relpath": "n01531178/n01531178_20660.JPEG",
+      "wnid": "n01531178",
+      "class_name": "goldfinch",
+      "imagenet_idx": 11,
+      "class_slot": 2,
+      "filename": "n01531178_20660.JPEG"
+    },
+    {
+      "id": "024",
+      "relpath": "n01531178/n01531178_22653.JPEG",
+      "wnid": "n01531178",
+      "class_name": "goldfinch",
+      "imagenet_idx": 11,
+      "class_slot": 2,
+      "filename": "n01531178_22653.JPEG"
+    },
+    {
+      "id": "025",
+      "relpath": "n01531178/n01531178_2487.JPEG",
+      "wnid": "n01531178",
+      "class_name": "goldfinch",
+      "imagenet_idx": 11,
+      "class_slot": 2,
+      "filename": "n01531178_2487.JPEG"
+    },
+    {
+      "id": "026",
+      "relpath": "n01531178/n01531178_26268.JPEG",
+      "wnid": "n01531178",
+      "class_name": "goldfinch",
+      "imagenet_idx": 11,
+      "class_slot": 2,
+      "filename": "n01531178_26268.JPEG"
+    },
+    {
+      "id": "027",
+      "relpath": "n01531178/n01531178_4370.JPEG",
+      "wnid": "n01531178",
+      "class_name": "goldfinch",
+      "imagenet_idx": 11,
+      "class_slot": 2,
+      "filename": "n01531178_4370.JPEG"
+    },
+    {
+      "id": "028",
+      "relpath": "n01531178/n01531178_5162.JPEG",
+      "wnid": "n01531178",
+      "class_name": "goldfinch",
+      "imagenet_idx": 11,
+      "class_slot": 2,
+      "filename": "n01531178_5162.JPEG"
+    },
+    {
+      "id": "029",
+      "relpath": "n01531178/n01531178_8650.JPEG",
+      "wnid": "n01531178",
+      "class_name": "goldfinch",
+      "imagenet_idx": 11,
+      "class_slot": 2,
+      "filename": "n01531178_8650.JPEG"
+    },
+    {
+      "id": "030",
+      "relpath": "n01632777/n01632777_15409.JPEG",
+      "wnid": "n01632777",
+      "class_name": "axolotl",
+      "imagenet_idx": 29,
+      "class_slot": 3,
+      "filename": "n01632777_15409.JPEG"
+    },
+    {
+      "id": "031",
+      "relpath": "n01632777/n01632777_17854.JPEG",
+      "wnid": "n01632777",
+      "class_name": "axolotl",
+      "imagenet_idx": 29,
+      "class_slot": 3,
+      "filename": "n01632777_17854.JPEG"
+    },
+    {
+      "id": "032",
+      "relpath": "n01632777/n01632777_18633.JPEG",
+      "wnid": "n01632777",
+      "class_name": "axolotl",
+      "imagenet_idx": 29,
+      "class_slot": 3,
+      "filename": "n01632777_18633.JPEG"
+    },
+    {
+      "id": "033",
+      "relpath": "n01632777/n01632777_19029.JPEG",
+      "wnid": "n01632777",
+      "class_name": "axolotl",
+      "imagenet_idx": 29,
+      "class_slot": 3,
+      "filename": "n01632777_19029.JPEG"
+    },
+    {
+      "id": "034",
+      "relpath": "n01632777/n01632777_20321.JPEG",
+      "wnid": "n01632777",
+      "class_name": "axolotl",
+      "imagenet_idx": 29,
+      "class_slot": 3,
+      "filename": "n01632777_20321.JPEG"
+    },
+    {
+      "id": "035",
+      "relpath": "n01632777/n01632777_22831.JPEG",
+      "wnid": "n01632777",
+      "class_name": "axolotl",
+      "imagenet_idx": 29,
+      "class_slot": 3,
+      "filename": "n01632777_22831.JPEG"
+    },
+    {
+      "id": "036",
+      "relpath": "n01632777/n01632777_2317.JPEG",
+      "wnid": "n01632777",
+      "class_name": "axolotl",
+      "imagenet_idx": 29,
+      "class_slot": 3,
+      "filename": "n01632777_2317.JPEG"
+    },
+    {
+      "id": "037",
+      "relpath": "n01632777/n01632777_23519.JPEG",
+      "wnid": "n01632777",
+      "class_name": "axolotl",
+      "imagenet_idx": 29,
+      "class_slot": 3,
+      "filename": "n01632777_23519.JPEG"
+    },
+    {
+      "id": "038",
+      "relpath": "n01632777/n01632777_23897.JPEG",
+      "wnid": "n01632777",
+      "class_name": "axolotl",
+      "imagenet_idx": 29,
+      "class_slot": 3,
+      "filename": "n01632777_23897.JPEG"
+    },
+    {
+      "id": "039",
+      "relpath": "n01632777/n01632777_9644.JPEG",
+      "wnid": "n01632777",
+      "class_name": "axolotl",
+      "imagenet_idx": 29,
+      "class_slot": 3,
+      "filename": "n01632777_9644.JPEG"
+    },
+    {
+      "id": "040",
+      "relpath": "n01665541/n01665541_10230.JPEG",
+      "wnid": "n01665541",
+      "class_name": "leatherback_turtle",
+      "imagenet_idx": 34,
+      "class_slot": 4,
+      "filename": "n01665541_10230.JPEG"
+    },
+    {
+      "id": "041",
+      "relpath": "n01665541/n01665541_12029.JPEG",
+      "wnid": "n01665541",
+      "class_name": "leatherback_turtle",
+      "imagenet_idx": 34,
+      "class_slot": 4,
+      "filename": "n01665541_12029.JPEG"
+    },
+    {
+      "id": "042",
+      "relpath": "n01665541/n01665541_17255.JPEG",
+      "wnid": "n01665541",
+      "class_name": "leatherback_turtle",
+      "imagenet_idx": 34,
+      "class_slot": 4,
+      "filename": "n01665541_17255.JPEG"
+    },
+    {
+      "id": "043",
+      "relpath": "n01665541/n01665541_1735.JPEG",
+      "wnid": "n01665541",
+      "class_name": "leatherback_turtle",
+      "imagenet_idx": 34,
+      "class_slot": 4,
+      "filename": "n01665541_1735.JPEG"
+    },
+    {
+      "id": "044",
+      "relpath": "n01665541/n01665541_3108.JPEG",
+      "wnid": "n01665541",
+      "class_name": "leatherback_turtle",
+      "imagenet_idx": 34,
+      "class_slot": 4,
+      "filename": "n01665541_3108.JPEG"
+    },
+    {
+      "id": "045",
+      "relpath": "n01665541/n01665541_3412.JPEG",
+      "wnid": "n01665541",
+      "class_name": "leatherback_turtle",
+      "imagenet_idx": 34,
+      "class_slot": 4,
+      "filename": "n01665541_3412.JPEG"
+    },
+    {
+      "id": "046",
+      "relpath": "n01665541/n01665541_5168.JPEG",
+      "wnid": "n01665541",
+      "class_name": "leatherback_turtle",
+      "imagenet_idx": 34,
+      "class_slot": 4,
+      "filename": "n01665541_5168.JPEG"
+    },
+    {
+      "id": "047",
+      "relpath": "n01665541/n01665541_5979.JPEG",
+      "wnid": "n01665541",
+      "class_name": "leatherback_turtle",
+      "imagenet_idx": 34,
+      "class_slot": 4,
+      "filename": "n01665541_5979.JPEG"
+    },
+    {
+      "id": "048",
+      "relpath": "n01665541/n01665541_6126.JPEG",
+      "wnid": "n01665541",
+      "class_name": "leatherback_turtle",
+      "imagenet_idx": 34,
+      "class_slot": 4,
+      "filename": "n01665541_6126.JPEG"
+    },
+    {
+      "id": "049",
+      "relpath": "n01665541/n01665541_6321.JPEG",
+      "wnid": "n01665541",
+      "class_name": "leatherback_turtle",
+      "imagenet_idx": 34,
+      "class_slot": 4,
+      "filename": "n01665541_6321.JPEG"
+    },
+    {
+      "id": "050",
+      "relpath": "n01687978/n01687978_10119.JPEG",
+      "wnid": "n01687978",
+      "class_name": "agama",
+      "imagenet_idx": 42,
+      "class_slot": 5,
+      "filename": "n01687978_10119.JPEG"
+    },
+    {
+      "id": "051",
+      "relpath": "n01687978/n01687978_1049.JPEG",
+      "wnid": "n01687978",
+      "class_name": "agama",
+      "imagenet_idx": 42,
+      "class_slot": 5,
+      "filename": "n01687978_1049.JPEG"
+    },
+    {
+      "id": "052",
+      "relpath": "n01687978/n01687978_12248.JPEG",
+      "wnid": "n01687978",
+      "class_name": "agama",
+      "imagenet_idx": 42,
+      "class_slot": 5,
+      "filename": "n01687978_12248.JPEG"
+    },
+    {
+      "id": "053",
+      "relpath": "n01687978/n01687978_142.JPEG",
+      "wnid": "n01687978",
+      "class_name": "agama",
+      "imagenet_idx": 42,
+      "class_slot": 5,
+      "filename": "n01687978_142.JPEG"
+    },
+    {
+      "id": "054",
+      "relpath": "n01687978/n01687978_1522.JPEG",
+      "wnid": "n01687978",
+      "class_name": "agama",
+      "imagenet_idx": 42,
+      "class_slot": 5,
+      "filename": "n01687978_1522.JPEG"
+    },
+    {
+      "id": "055",
+      "relpath": "n01687978/n01687978_3111.JPEG",
+      "wnid": "n01687978",
+      "class_name": "agama",
+      "imagenet_idx": 42,
+      "class_slot": 5,
+      "filename": "n01687978_3111.JPEG"
+    },
+    {
+      "id": "056",
+      "relpath": "n01687978/n01687978_6786.JPEG",
+      "wnid": "n01687978",
+      "class_name": "agama",
+      "imagenet_idx": 42,
+      "class_slot": 5,
+      "filename": "n01687978_6786.JPEG"
+    },
+    {
+      "id": "057",
+      "relpath": "n01687978/n01687978_7572.JPEG",
+      "wnid": "n01687978",
+      "class_name": "agama",
+      "imagenet_idx": 42,
+      "class_slot": 5,
+      "filename": "n01687978_7572.JPEG"
+    },
+    {
+      "id": "058",
+      "relpath": "n01687978/n01687978_8251.JPEG",
+      "wnid": "n01687978",
+      "class_name": "agama",
+      "imagenet_idx": 42,
+      "class_slot": 5,
+      "filename": "n01687978_8251.JPEG"
+    },
+    {
+      "id": "059",
+      "relpath": "n01687978/n01687978_875.JPEG",
+      "wnid": "n01687978",
+      "class_name": "agama",
+      "imagenet_idx": 42,
+      "class_slot": 5,
+      "filename": "n01687978_875.JPEG"
+    },
+    {
+      "id": "060",
+      "relpath": "n01695060/n01695060_10512.JPEG",
+      "wnid": "n01695060",
+      "class_name": "komodo_dragon",
+      "imagenet_idx": 48,
+      "class_slot": 6,
+      "filename": "n01695060_10512.JPEG"
+    },
+    {
+      "id": "061",
+      "relpath": "n01695060/n01695060_10946.JPEG",
+      "wnid": "n01695060",
+      "class_name": "komodo_dragon",
+      "imagenet_idx": 48,
+      "class_slot": 6,
+      "filename": "n01695060_10946.JPEG"
+    },
+    {
+      "id": "062",
+      "relpath": "n01695060/n01695060_12418.JPEG",
+      "wnid": "n01695060",
+      "class_name": "komodo_dragon",
+      "imagenet_idx": 48,
+      "class_slot": 6,
+      "filename": "n01695060_12418.JPEG"
+    },
+    {
+      "id": "063",
+      "relpath": "n01695060/n01695060_13307.JPEG",
+      "wnid": "n01695060",
+      "class_name": "komodo_dragon",
+      "imagenet_idx": 48,
+      "class_slot": 6,
+      "filename": "n01695060_13307.JPEG"
+    },
+    {
+      "id": "064",
+      "relpath": "n01695060/n01695060_15590.JPEG",
+      "wnid": "n01695060",
+      "class_name": "komodo_dragon",
+      "imagenet_idx": 48,
+      "class_slot": 6,
+      "filename": "n01695060_15590.JPEG"
+    },
+    {
+      "id": "065",
+      "relpath": "n01695060/n01695060_24671.JPEG",
+      "wnid": "n01695060",
+      "class_name": "komodo_dragon",
+      "imagenet_idx": 48,
+      "class_slot": 6,
+      "filename": "n01695060_24671.JPEG"
+    },
+    {
+      "id": "066",
+      "relpath": "n01695060/n01695060_2626.JPEG",
+      "wnid": "n01695060",
+      "class_name": "komodo_dragon",
+      "imagenet_idx": 48,
+      "class_slot": 6,
+      "filename": "n01695060_2626.JPEG"
+    },
+    {
+      "id": "067",
+      "relpath": "n01695060/n01695060_446.JPEG",
+      "wnid": "n01695060",
+      "class_name": "komodo_dragon",
+      "imagenet_idx": 48,
+      "class_slot": 6,
+      "filename": "n01695060_446.JPEG"
+    },
+    {
+      "id": "068",
+      "relpath": "n01695060/n01695060_7011.JPEG",
+      "wnid": "n01695060",
+      "class_name": "komodo_dragon",
+      "imagenet_idx": 48,
+      "class_slot": 6,
+      "filename": "n01695060_7011.JPEG"
+    },
+    {
+      "id": "069",
+      "relpath": "n01695060/n01695060_7302.JPEG",
+      "wnid": "n01695060",
+      "class_name": "komodo_dragon",
+      "imagenet_idx": 48,
+      "class_slot": 6,
+      "filename": "n01695060_7302.JPEG"
+    },
+    {
+      "id": "070",
+      "relpath": "n01749939/n01749939_1183.JPEG",
+      "wnid": "n01749939",
+      "class_name": "green_mamba",
+      "imagenet_idx": 64,
+      "class_slot": 7,
+      "filename": "n01749939_1183.JPEG"
+    },
+    {
+      "id": "071",
+      "relpath": "n01749939/n01749939_3163.JPEG",
+      "wnid": "n01749939",
+      "class_name": "green_mamba",
+      "imagenet_idx": 64,
+      "class_slot": 7,
+      "filename": "n01749939_3163.JPEG"
+    },
+    {
+      "id": "072",
+      "relpath": "n01749939/n01749939_3565.JPEG",
+      "wnid": "n01749939",
+      "class_name": "green_mamba",
+      "imagenet_idx": 64,
+      "class_slot": 7,
+      "filename": "n01749939_3565.JPEG"
+    },
+    {
+      "id": "073",
+      "relpath": "n01749939/n01749939_3608.JPEG",
+      "wnid": "n01749939",
+      "class_name": "green_mamba",
+      "imagenet_idx": 64,
+      "class_slot": 7,
+      "filename": "n01749939_3608.JPEG"
+    },
+    {
+      "id": "074",
+      "relpath": "n01749939/n01749939_3644.JPEG",
+      "wnid": "n01749939",
+      "class_name": "green_mamba",
+      "imagenet_idx": 64,
+      "class_slot": 7,
+      "filename": "n01749939_3644.JPEG"
+    },
+    {
+      "id": "075",
+      "relpath": "n01749939/n01749939_40.JPEG",
+      "wnid": "n01749939",
+      "class_name": "green_mamba",
+      "imagenet_idx": 64,
+      "class_slot": 7,
+      "filename": "n01749939_40.JPEG"
+    },
+    {
+      "id": "076",
+      "relpath": "n01749939/n01749939_5663.JPEG",
+      "wnid": "n01749939",
+      "class_name": "green_mamba",
+      "imagenet_idx": 64,
+      "class_slot": 7,
+      "filename": "n01749939_5663.JPEG"
+    },
+    {
+      "id": "077",
+      "relpath": "n01749939/n01749939_5703.JPEG",
+      "wnid": "n01749939",
+      "class_name": "green_mamba",
+      "imagenet_idx": 64,
+      "class_slot": 7,
+      "filename": "n01749939_5703.JPEG"
+    },
+    {
+      "id": "078",
+      "relpath": "n01749939/n01749939_6356.JPEG",
+      "wnid": "n01749939",
+      "class_name": "green_mamba",
+      "imagenet_idx": 64,
+      "class_slot": 7,
+      "filename": "n01749939_6356.JPEG"
+    },
+    {
+      "id": "079",
+      "relpath": "n01749939/n01749939_820.JPEG",
+      "wnid": "n01749939",
+      "class_name": "green_mamba",
+      "imagenet_idx": 64,
+      "class_slot": 7,
+      "filename": "n01749939_820.JPEG"
+    },
+    {
+      "id": "080",
+      "relpath": "n01818515/n01818515_116.JPEG",
+      "wnid": "n01818515",
+      "class_name": "macaw",
+      "imagenet_idx": 88,
+      "class_slot": 8,
+      "filename": "n01818515_116.JPEG"
+    },
+    {
+      "id": "081",
+      "relpath": "n01818515/n01818515_14138.JPEG",
+      "wnid": "n01818515",
+      "class_name": "macaw",
+      "imagenet_idx": 88,
+      "class_slot": 8,
+      "filename": "n01818515_14138.JPEG"
+    },
+    {
+      "id": "082",
+      "relpath": "n01818515/n01818515_2502.JPEG",
+      "wnid": "n01818515",
+      "class_name": "macaw",
+      "imagenet_idx": 88,
+      "class_slot": 8,
+      "filename": "n01818515_2502.JPEG"
+    },
+    {
+      "id": "083",
+      "relpath": "n01818515/n01818515_2590.JPEG",
+      "wnid": "n01818515",
+      "class_name": "macaw",
+      "imagenet_idx": 88,
+      "class_slot": 8,
+      "filename": "n01818515_2590.JPEG"
+    },
+    {
+      "id": "084",
+      "relpath": "n01818515/n01818515_2600.JPEG",
+      "wnid": "n01818515",
+      "class_name": "macaw",
+      "imagenet_idx": 88,
+      "class_slot": 8,
+      "filename": "n01818515_2600.JPEG"
+    },
+    {
+      "id": "085",
+      "relpath": "n01818515/n01818515_26717.JPEG",
+      "wnid": "n01818515",
+      "class_name": "macaw",
+      "imagenet_idx": 88,
+      "class_slot": 8,
+      "filename": "n01818515_26717.JPEG"
+    },
+    {
+      "id": "086",
+      "relpath": "n01818515/n01818515_3548.JPEG",
+      "wnid": "n01818515",
+      "class_name": "macaw",
+      "imagenet_idx": 88,
+      "class_slot": 8,
+      "filename": "n01818515_3548.JPEG"
+    },
+    {
+      "id": "087",
+      "relpath": "n01818515/n01818515_5575.JPEG",
+      "wnid": "n01818515",
+      "class_name": "macaw",
+      "imagenet_idx": 88,
+      "class_slot": 8,
+      "filename": "n01818515_5575.JPEG"
+    },
+    {
+      "id": "088",
+      "relpath": "n01818515/n01818515_6086.JPEG",
+      "wnid": "n01818515",
+      "class_name": "macaw",
+      "imagenet_idx": 88,
+      "class_slot": 8,
+      "filename": "n01818515_6086.JPEG"
+    },
+    {
+      "id": "089",
+      "relpath": "n01818515/n01818515_6224.JPEG",
+      "wnid": "n01818515",
+      "class_name": "macaw",
+      "imagenet_idx": 88,
+      "class_slot": 8,
+      "filename": "n01818515_6224.JPEG"
+    },
+    {
+      "id": "090",
+      "relpath": "n01833805/n01833805_12264.JPEG",
+      "wnid": "n01833805",
+      "class_name": "hummingbird",
+      "imagenet_idx": 94,
+      "class_slot": 9,
+      "filename": "n01833805_12264.JPEG"
+    },
+    {
+      "id": "091",
+      "relpath": "n01833805/n01833805_12338.JPEG",
+      "wnid": "n01833805",
+      "class_name": "hummingbird",
+      "imagenet_idx": 94,
+      "class_slot": 9,
+      "filename": "n01833805_12338.JPEG"
+    },
+    {
+      "id": "092",
+      "relpath": "n01833805/n01833805_13281.JPEG",
+      "wnid": "n01833805",
+      "class_name": "hummingbird",
+      "imagenet_idx": 94,
+      "class_slot": 9,
+      "filename": "n01833805_13281.JPEG"
+    },
+    {
+      "id": "093",
+      "relpath": "n01833805/n01833805_14560.JPEG",
+      "wnid": "n01833805",
+      "class_name": "hummingbird",
+      "imagenet_idx": 94,
+      "class_slot": 9,
+      "filename": "n01833805_14560.JPEG"
+    },
+    {
+      "id": "094",
+      "relpath": "n01833805/n01833805_20671.JPEG",
+      "wnid": "n01833805",
+      "class_name": "hummingbird",
+      "imagenet_idx": 94,
+      "class_slot": 9,
+      "filename": "n01833805_20671.JPEG"
+    },
+    {
+      "id": "095",
+      "relpath": "n01833805/n01833805_2403.JPEG",
+      "wnid": "n01833805",
+      "class_name": "hummingbird",
+      "imagenet_idx": 94,
+      "class_slot": 9,
+      "filename": "n01833805_2403.JPEG"
+    },
+    {
+      "id": "096",
+      "relpath": "n01833805/n01833805_24325.JPEG",
+      "wnid": "n01833805",
+      "class_name": "hummingbird",
+      "imagenet_idx": 94,
+      "class_slot": 9,
+      "filename": "n01833805_24325.JPEG"
+    },
+    {
+      "id": "097",
+      "relpath": "n01833805/n01833805_338.JPEG",
+      "wnid": "n01833805",
+      "class_name": "hummingbird",
+      "imagenet_idx": 94,
+      "class_slot": 9,
+      "filename": "n01833805_338.JPEG"
+    },
+    {
+      "id": "098",
+      "relpath": "n01833805/n01833805_515.JPEG",
+      "wnid": "n01833805",
+      "class_name": "hummingbird",
+      "imagenet_idx": 94,
+      "class_slot": 9,
+      "filename": "n01833805_515.JPEG"
+    },
+    {
+      "id": "099",
+      "relpath": "n01833805/n01833805_559.JPEG",
+      "wnid": "n01833805",
+      "class_name": "hummingbird",
+      "imagenet_idx": 94,
+      "class_slot": 9,
+      "filename": "n01833805_559.JPEG"
+    },
+    {
+      "id": "100",
+      "relpath": "n02012849/n02012849_10972.JPEG",
+      "wnid": "n02012849",
+      "class_name": "crane",
+      "imagenet_idx": 134,
+      "class_slot": 10,
+      "filename": "n02012849_10972.JPEG"
+    },
+    {
+      "id": "101",
+      "relpath": "n02012849/n02012849_1159.JPEG",
+      "wnid": "n02012849",
+      "class_name": "crane",
+      "imagenet_idx": 134,
+      "class_slot": 10,
+      "filename": "n02012849_1159.JPEG"
+    },
+    {
+      "id": "102",
+      "relpath": "n02012849/n02012849_13578.JPEG",
+      "wnid": "n02012849",
+      "class_name": "crane",
+      "imagenet_idx": 134,
+      "class_slot": 10,
+      "filename": "n02012849_13578.JPEG"
+    },
+    {
+      "id": "103",
+      "relpath": "n02012849/n02012849_3044.JPEG",
+      "wnid": "n02012849",
+      "class_name": "crane",
+      "imagenet_idx": 134,
+      "class_slot": 10,
+      "filename": "n02012849_3044.JPEG"
+    },
+    {
+      "id": "104",
+      "relpath": "n02012849/n02012849_4040.JPEG",
+      "wnid": "n02012849",
+      "class_name": "crane",
+      "imagenet_idx": 134,
+      "class_slot": 10,
+      "filename": "n02012849_4040.JPEG"
+    },
+    {
+      "id": "105",
+      "relpath": "n02012849/n02012849_4455.JPEG",
+      "wnid": "n02012849",
+      "class_name": "crane",
+      "imagenet_idx": 134,
+      "class_slot": 10,
+      "filename": "n02012849_4455.JPEG"
+    },
+    {
+      "id": "106",
+      "relpath": "n02012849/n02012849_6443.JPEG",
+      "wnid": "n02012849",
+      "class_name": "crane",
+      "imagenet_idx": 134,
+      "class_slot": 10,
+      "filename": "n02012849_6443.JPEG"
+    },
+    {
+      "id": "107",
+      "relpath": "n02012849/n02012849_6748.JPEG",
+      "wnid": "n02012849",
+      "class_name": "crane",
+      "imagenet_idx": 134,
+      "class_slot": 10,
+      "filename": "n02012849_6748.JPEG"
+    },
+    {
+      "id": "108",
+      "relpath": "n02012849/n02012849_7710.JPEG",
+      "wnid": "n02012849",
+      "class_name": "crane",
+      "imagenet_idx": 134,
+      "class_slot": 10,
+      "filename": "n02012849_7710.JPEG"
+    },
+    {
+      "id": "109",
+      "relpath": "n02012849/n02012849_8539.JPEG",
+      "wnid": "n02012849",
+      "class_name": "crane",
+      "imagenet_idx": 134,
+      "class_slot": 10,
+      "filename": "n02012849_8539.JPEG"
+    },
+    {
+      "id": "110",
+      "relpath": "n02018795/n02018795_1094.JPEG",
+      "wnid": "n02018795",
+      "class_name": "bustard",
+      "imagenet_idx": 138,
+      "class_slot": 11,
+      "filename": "n02018795_1094.JPEG"
+    },
+    {
+      "id": "111",
+      "relpath": "n02018795/n02018795_14150.JPEG",
+      "wnid": "n02018795",
+      "class_name": "bustard",
+      "imagenet_idx": 138,
+      "class_slot": 11,
+      "filename": "n02018795_14150.JPEG"
+    },
+    {
+      "id": "112",
+      "relpath": "n02018795/n02018795_15211.JPEG",
+      "wnid": "n02018795",
+      "class_name": "bustard",
+      "imagenet_idx": 138,
+      "class_slot": 11,
+      "filename": "n02018795_15211.JPEG"
+    },
+    {
+      "id": "113",
+      "relpath": "n02018795/n02018795_1575.JPEG",
+      "wnid": "n02018795",
+      "class_name": "bustard",
+      "imagenet_idx": 138,
+      "class_slot": 11,
+      "filename": "n02018795_1575.JPEG"
+    },
+    {
+      "id": "114",
+      "relpath": "n02018795/n02018795_17725.JPEG",
+      "wnid": "n02018795",
+      "class_name": "bustard",
+      "imagenet_idx": 138,
+      "class_slot": 11,
+      "filename": "n02018795_17725.JPEG"
+    },
+    {
+      "id": "115",
+      "relpath": "n02018795/n02018795_2205.JPEG",
+      "wnid": "n02018795",
+      "class_name": "bustard",
+      "imagenet_idx": 138,
+      "class_slot": 11,
+      "filename": "n02018795_2205.JPEG"
+    },
+    {
+      "id": "116",
+      "relpath": "n02018795/n02018795_2382.JPEG",
+      "wnid": "n02018795",
+      "class_name": "bustard",
+      "imagenet_idx": 138,
+      "class_slot": 11,
+      "filename": "n02018795_2382.JPEG"
+    },
+    {
+      "id": "117",
+      "relpath": "n02018795/n02018795_3113.JPEG",
+      "wnid": "n02018795",
+      "class_name": "bustard",
+      "imagenet_idx": 138,
+      "class_slot": 11,
+      "filename": "n02018795_3113.JPEG"
+    },
+    {
+      "id": "118",
+      "relpath": "n02018795/n02018795_366.JPEG",
+      "wnid": "n02018795",
+      "class_name": "bustard",
+      "imagenet_idx": 138,
+      "class_slot": 11,
+      "filename": "n02018795_366.JPEG"
+    },
+    {
+      "id": "119",
+      "relpath": "n02018795/n02018795_6182.JPEG",
+      "wnid": "n02018795",
+      "class_name": "bustard",
+      "imagenet_idx": 138,
+      "class_slot": 11,
+      "filename": "n02018795_6182.JPEG"
+    },
+    {
+      "id": "120",
+      "relpath": "n02037110/n02037110_10420.JPEG",
+      "wnid": "n02037110",
+      "class_name": "oystercatcher",
+      "imagenet_idx": 143,
+      "class_slot": 12,
+      "filename": "n02037110_10420.JPEG"
+    },
+    {
+      "id": "121",
+      "relpath": "n02037110/n02037110_12981.JPEG",
+      "wnid": "n02037110",
+      "class_name": "oystercatcher",
+      "imagenet_idx": 143,
+      "class_slot": 12,
+      "filename": "n02037110_12981.JPEG"
+    },
+    {
+      "id": "122",
+      "relpath": "n02037110/n02037110_18146.JPEG",
+      "wnid": "n02037110",
+      "class_name": "oystercatcher",
+      "imagenet_idx": 143,
+      "class_slot": 12,
+      "filename": "n02037110_18146.JPEG"
+    },
+    {
+      "id": "123",
+      "relpath": "n02037110/n02037110_34174.JPEG",
+      "wnid": "n02037110",
+      "class_name": "oystercatcher",
+      "imagenet_idx": 143,
+      "class_slot": 12,
+      "filename": "n02037110_34174.JPEG"
+    },
+    {
+      "id": "124",
+      "relpath": "n02037110/n02037110_3853.JPEG",
+      "wnid": "n02037110",
+      "class_name": "oystercatcher",
+      "imagenet_idx": 143,
+      "class_slot": 12,
+      "filename": "n02037110_3853.JPEG"
+    },
+    {
+      "id": "125",
+      "relpath": "n02037110/n02037110_3986.JPEG",
+      "wnid": "n02037110",
+      "class_name": "oystercatcher",
+      "imagenet_idx": 143,
+      "class_slot": 12,
+      "filename": "n02037110_3986.JPEG"
+    },
+    {
+      "id": "126",
+      "relpath": "n02037110/n02037110_4852.JPEG",
+      "wnid": "n02037110",
+      "class_name": "oystercatcher",
+      "imagenet_idx": 143,
+      "class_slot": 12,
+      "filename": "n02037110_4852.JPEG"
+    },
+    {
+      "id": "127",
+      "relpath": "n02037110/n02037110_6045.JPEG",
+      "wnid": "n02037110",
+      "class_name": "oystercatcher",
+      "imagenet_idx": 143,
+      "class_slot": 12,
+      "filename": "n02037110_6045.JPEG"
+    },
+    {
+      "id": "128",
+      "relpath": "n02037110/n02037110_6505.JPEG",
+      "wnid": "n02037110",
+      "class_name": "oystercatcher",
+      "imagenet_idx": 143,
+      "class_slot": 12,
+      "filename": "n02037110_6505.JPEG"
+    },
+    {
+      "id": "129",
+      "relpath": "n02037110/n02037110_7590.JPEG",
+      "wnid": "n02037110",
+      "class_name": "oystercatcher",
+      "imagenet_idx": 143,
+      "class_slot": 12,
+      "filename": "n02037110_7590.JPEG"
+    },
+    {
+      "id": "130",
+      "relpath": "n01914609/n01914609_10.JPEG",
+      "wnid": "n01914609",
+      "class_name": "jellyfish",
+      "imagenet_idx": 107,
+      "class_slot": 13,
+      "filename": "n01914609_10.JPEG"
+    },
+    {
+      "id": "131",
+      "relpath": "n01914609/n01914609_10444.JPEG",
+      "wnid": "n01914609",
+      "class_name": "jellyfish",
+      "imagenet_idx": 107,
+      "class_slot": 13,
+      "filename": "n01914609_10444.JPEG"
+    },
+    {
+      "id": "132",
+      "relpath": "n01914609/n01914609_15993.JPEG",
+      "wnid": "n01914609",
+      "class_name": "jellyfish",
+      "imagenet_idx": 107,
+      "class_slot": 13,
+      "filename": "n01914609_15993.JPEG"
+    },
+    {
+      "id": "133",
+      "relpath": "n01914609/n01914609_20294.JPEG",
+      "wnid": "n01914609",
+      "class_name": "jellyfish",
+      "imagenet_idx": 107,
+      "class_slot": 13,
+      "filename": "n01914609_20294.JPEG"
+    },
+    {
+      "id": "134",
+      "relpath": "n01914609/n01914609_3615.JPEG",
+      "wnid": "n01914609",
+      "class_name": "jellyfish",
+      "imagenet_idx": 107,
+      "class_slot": 13,
+      "filename": "n01914609_3615.JPEG"
+    },
+    {
+      "id": "135",
+      "relpath": "n01914609/n01914609_4389.JPEG",
+      "wnid": "n01914609",
+      "class_name": "jellyfish",
+      "imagenet_idx": 107,
+      "class_slot": 13,
+      "filename": "n01914609_4389.JPEG"
+    },
+    {
+      "id": "136",
+      "relpath": "n01914609/n01914609_4914.JPEG",
+      "wnid": "n01914609",
+      "class_name": "jellyfish",
+      "imagenet_idx": 107,
+      "class_slot": 13,
+      "filename": "n01914609_4914.JPEG"
+    },
+    {
+      "id": "137",
+      "relpath": "n01914609/n01914609_5021.JPEG",
+      "wnid": "n01914609",
+      "class_name": "jellyfish",
+      "imagenet_idx": 107,
+      "class_slot": 13,
+      "filename": "n01914609_5021.JPEG"
+    },
+    {
+      "id": "138",
+      "relpath": "n01914609/n01914609_7096.JPEG",
+      "wnid": "n01914609",
+      "class_name": "jellyfish",
+      "imagenet_idx": 107,
+      "class_slot": 13,
+      "filename": "n01914609_7096.JPEG"
+    },
+    {
+      "id": "139",
+      "relpath": "n01914609/n01914609_7361.JPEG",
+      "wnid": "n01914609",
+      "class_name": "jellyfish",
+      "imagenet_idx": 107,
+      "class_slot": 13,
+      "filename": "n01914609_7361.JPEG"
+    },
+    {
+      "id": "140",
+      "relpath": "n01924916/n01924916_1851.JPEG",
+      "wnid": "n01924916",
+      "class_name": "flatworm",
+      "imagenet_idx": 110,
+      "class_slot": 14,
+      "filename": "n01924916_1851.JPEG"
+    },
+    {
+      "id": "141",
+      "relpath": "n01924916/n01924916_2280.JPEG",
+      "wnid": "n01924916",
+      "class_name": "flatworm",
+      "imagenet_idx": 110,
+      "class_slot": 14,
+      "filename": "n01924916_2280.JPEG"
+    },
+    {
+      "id": "142",
+      "relpath": "n01924916/n01924916_3186.JPEG",
+      "wnid": "n01924916",
+      "class_name": "flatworm",
+      "imagenet_idx": 110,
+      "class_slot": 14,
+      "filename": "n01924916_3186.JPEG"
+    },
+    {
+      "id": "143",
+      "relpath": "n01924916/n01924916_3386.JPEG",
+      "wnid": "n01924916",
+      "class_name": "flatworm",
+      "imagenet_idx": 110,
+      "class_slot": 14,
+      "filename": "n01924916_3386.JPEG"
+    },
+    {
+      "id": "144",
+      "relpath": "n01924916/n01924916_3722.JPEG",
+      "wnid": "n01924916",
+      "class_name": "flatworm",
+      "imagenet_idx": 110,
+      "class_slot": 14,
+      "filename": "n01924916_3722.JPEG"
+    },
+    {
+      "id": "145",
+      "relpath": "n01924916/n01924916_6679.JPEG",
+      "wnid": "n01924916",
+      "class_name": "flatworm",
+      "imagenet_idx": 110,
+      "class_slot": 14,
+      "filename": "n01924916_6679.JPEG"
+    },
+    {
+      "id": "146",
+      "relpath": "n01924916/n01924916_6886.JPEG",
+      "wnid": "n01924916",
+      "class_name": "flatworm",
+      "imagenet_idx": 110,
+      "class_slot": 14,
+      "filename": "n01924916_6886.JPEG"
+    },
+    {
+      "id": "147",
+      "relpath": "n01924916/n01924916_6998.JPEG",
+      "wnid": "n01924916",
+      "class_name": "flatworm",
+      "imagenet_idx": 110,
+      "class_slot": 14,
+      "filename": "n01924916_6998.JPEG"
+    },
+    {
+      "id": "148",
+      "relpath": "n01924916/n01924916_7533.JPEG",
+      "wnid": "n01924916",
+      "class_name": "flatworm",
+      "imagenet_idx": 110,
+      "class_slot": 14,
+      "filename": "n01924916_7533.JPEG"
+    },
+    {
+      "id": "149",
+      "relpath": "n01924916/n01924916_8450.JPEG",
+      "wnid": "n01924916",
+      "class_name": "flatworm",
+      "imagenet_idx": 110,
+      "class_slot": 14,
+      "filename": "n01924916_8450.JPEG"
+    },
+    {
+      "id": "150",
+      "relpath": "n01930112/n01930112_11460.JPEG",
+      "wnid": "n01930112",
+      "class_name": "nematode",
+      "imagenet_idx": 111,
+      "class_slot": 15,
+      "filename": "n01930112_11460.JPEG"
+    },
+    {
+      "id": "151",
+      "relpath": "n01930112/n01930112_12192.JPEG",
+      "wnid": "n01930112",
+      "class_name": "nematode",
+      "imagenet_idx": 111,
+      "class_slot": 15,
+      "filename": "n01930112_12192.JPEG"
+    },
+    {
+      "id": "152",
+      "relpath": "n01930112/n01930112_13303.JPEG",
+      "wnid": "n01930112",
+      "class_name": "nematode",
+      "imagenet_idx": 111,
+      "class_slot": 15,
+      "filename": "n01930112_13303.JPEG"
+    },
+    {
+      "id": "153",
+      "relpath": "n01930112/n01930112_13913.JPEG",
+      "wnid": "n01930112",
+      "class_name": "nematode",
+      "imagenet_idx": 111,
+      "class_slot": 15,
+      "filename": "n01930112_13913.JPEG"
+    },
+    {
+      "id": "154",
+      "relpath": "n01930112/n01930112_14222.JPEG",
+      "wnid": "n01930112",
+      "class_name": "nematode",
+      "imagenet_idx": 111,
+      "class_slot": 15,
+      "filename": "n01930112_14222.JPEG"
+    },
+    {
+      "id": "155",
+      "relpath": "n01930112/n01930112_21102.JPEG",
+      "wnid": "n01930112",
+      "class_name": "nematode",
+      "imagenet_idx": 111,
+      "class_slot": 15,
+      "filename": "n01930112_21102.JPEG"
+    },
+    {
+      "id": "156",
+      "relpath": "n01930112/n01930112_2432.JPEG",
+      "wnid": "n01930112",
+      "class_name": "nematode",
+      "imagenet_idx": 111,
+      "class_slot": 15,
+      "filename": "n01930112_2432.JPEG"
+    },
+    {
+      "id": "157",
+      "relpath": "n01930112/n01930112_6326.JPEG",
+      "wnid": "n01930112",
+      "class_name": "nematode",
+      "imagenet_idx": 111,
+      "class_slot": 15,
+      "filename": "n01930112_6326.JPEG"
+    },
+    {
+      "id": "158",
+      "relpath": "n01930112/n01930112_9186.JPEG",
+      "wnid": "n01930112",
+      "class_name": "nematode",
+      "imagenet_idx": 111,
+      "class_slot": 15,
+      "filename": "n01930112_9186.JPEG"
+    },
+    {
+      "id": "159",
+      "relpath": "n01930112/n01930112_9642.JPEG",
+      "wnid": "n01930112",
+      "class_name": "nematode",
+      "imagenet_idx": 111,
+      "class_slot": 15,
+      "filename": "n01930112_9642.JPEG"
+    },
+    {
+      "id": "160",
+      "relpath": "n01950731/n01950731_10185.JPEG",
+      "wnid": "n01950731",
+      "class_name": "sea_slug",
+      "imagenet_idx": 115,
+      "class_slot": 16,
+      "filename": "n01950731_10185.JPEG"
+    },
+    {
+      "id": "161",
+      "relpath": "n01950731/n01950731_12104.JPEG",
+      "wnid": "n01950731",
+      "class_name": "sea_slug",
+      "imagenet_idx": 115,
+      "class_slot": 16,
+      "filename": "n01950731_12104.JPEG"
+    },
+    {
+      "id": "162",
+      "relpath": "n01950731/n01950731_12871.JPEG",
+      "wnid": "n01950731",
+      "class_name": "sea_slug",
+      "imagenet_idx": 115,
+      "class_slot": 16,
+      "filename": "n01950731_12871.JPEG"
+    },
+    {
+      "id": "163",
+      "relpath": "n01950731/n01950731_17881.JPEG",
+      "wnid": "n01950731",
+      "class_name": "sea_slug",
+      "imagenet_idx": 115,
+      "class_slot": 16,
+      "filename": "n01950731_17881.JPEG"
+    },
+    {
+      "id": "164",
+      "relpath": "n01950731/n01950731_22717.JPEG",
+      "wnid": "n01950731",
+      "class_name": "sea_slug",
+      "imagenet_idx": 115,
+      "class_slot": 16,
+      "filename": "n01950731_22717.JPEG"
+    },
+    {
+      "id": "165",
+      "relpath": "n01950731/n01950731_271.JPEG",
+      "wnid": "n01950731",
+      "class_name": "sea_slug",
+      "imagenet_idx": 115,
+      "class_slot": 16,
+      "filename": "n01950731_271.JPEG"
+    },
+    {
+      "id": "166",
+      "relpath": "n01950731/n01950731_4401.JPEG",
+      "wnid": "n01950731",
+      "class_name": "sea_slug",
+      "imagenet_idx": 115,
+      "class_slot": 16,
+      "filename": "n01950731_4401.JPEG"
+    },
+    {
+      "id": "167",
+      "relpath": "n01950731/n01950731_6891.JPEG",
+      "wnid": "n01950731",
+      "class_name": "sea_slug",
+      "imagenet_idx": 115,
+      "class_slot": 16,
+      "filename": "n01950731_6891.JPEG"
+    },
+    {
+      "id": "168",
+      "relpath": "n01950731/n01950731_719.JPEG",
+      "wnid": "n01950731",
+      "class_name": "sea_slug",
+      "imagenet_idx": 115,
+      "class_slot": 16,
+      "filename": "n01950731_719.JPEG"
+    },
+    {
+      "id": "169",
+      "relpath": "n01950731/n01950731_8888.JPEG",
+      "wnid": "n01950731",
+      "class_name": "sea_slug",
+      "imagenet_idx": 115,
+      "class_slot": 16,
+      "filename": "n01950731_8888.JPEG"
+    },
+    {
+      "id": "170",
+      "relpath": "n01978455/n01978455_1091.JPEG",
+      "wnid": "n01978455",
+      "class_name": "rock_crab",
+      "imagenet_idx": 119,
+      "class_slot": 17,
+      "filename": "n01978455_1091.JPEG"
+    },
+    {
+      "id": "171",
+      "relpath": "n01978455/n01978455_11530.JPEG",
+      "wnid": "n01978455",
+      "class_name": "rock_crab",
+      "imagenet_idx": 119,
+      "class_slot": 17,
+      "filename": "n01978455_11530.JPEG"
+    },
+    {
+      "id": "172",
+      "relpath": "n01978455/n01978455_12106.JPEG",
+      "wnid": "n01978455",
+      "class_name": "rock_crab",
+      "imagenet_idx": 119,
+      "class_slot": 17,
+      "filename": "n01978455_12106.JPEG"
+    },
+    {
+      "id": "173",
+      "relpath": "n01978455/n01978455_1499.JPEG",
+      "wnid": "n01978455",
+      "class_name": "rock_crab",
+      "imagenet_idx": 119,
+      "class_slot": 17,
+      "filename": "n01978455_1499.JPEG"
+    },
+    {
+      "id": "174",
+      "relpath": "n01978455/n01978455_2052.JPEG",
+      "wnid": "n01978455",
+      "class_name": "rock_crab",
+      "imagenet_idx": 119,
+      "class_slot": 17,
+      "filename": "n01978455_2052.JPEG"
+    },
+    {
+      "id": "175",
+      "relpath": "n01978455/n01978455_3996.JPEG",
+      "wnid": "n01978455",
+      "class_name": "rock_crab",
+      "imagenet_idx": 119,
+      "class_slot": 17,
+      "filename": "n01978455_3996.JPEG"
+    },
+    {
+      "id": "176",
+      "relpath": "n01978455/n01978455_517.JPEG",
+      "wnid": "n01978455",
+      "class_name": "rock_crab",
+      "imagenet_idx": 119,
+      "class_slot": 17,
+      "filename": "n01978455_517.JPEG"
+    },
+    {
+      "id": "177",
+      "relpath": "n01978455/n01978455_6109.JPEG",
+      "wnid": "n01978455",
+      "class_name": "rock_crab",
+      "imagenet_idx": 119,
+      "class_slot": 17,
+      "filename": "n01978455_6109.JPEG"
+    },
+    {
+      "id": "178",
+      "relpath": "n01978455/n01978455_7672.JPEG",
+      "wnid": "n01978455",
+      "class_name": "rock_crab",
+      "imagenet_idx": 119,
+      "class_slot": 17,
+      "filename": "n01978455_7672.JPEG"
+    },
+    {
+      "id": "179",
+      "relpath": "n01978455/n01978455_8227.JPEG",
+      "wnid": "n01978455",
+      "class_name": "rock_crab",
+      "imagenet_idx": 119,
+      "class_slot": 17,
+      "filename": "n01978455_8227.JPEG"
+    },
+    {
+      "id": "180",
+      "relpath": "n01984695/n01984695_10601.JPEG",
+      "wnid": "n01984695",
+      "class_name": "spiny_lobster",
+      "imagenet_idx": 123,
+      "class_slot": 18,
+      "filename": "n01984695_10601.JPEG"
+    },
+    {
+      "id": "181",
+      "relpath": "n01984695/n01984695_15965.JPEG",
+      "wnid": "n01984695",
+      "class_name": "spiny_lobster",
+      "imagenet_idx": 123,
+      "class_slot": 18,
+      "filename": "n01984695_15965.JPEG"
+    },
+    {
+      "id": "182",
+      "relpath": "n01984695/n01984695_23132.JPEG",
+      "wnid": "n01984695",
+      "class_name": "spiny_lobster",
+      "imagenet_idx": 123,
+      "class_slot": 18,
+      "filename": "n01984695_23132.JPEG"
+    },
+    {
+      "id": "183",
+      "relpath": "n01984695/n01984695_23711.JPEG",
+      "wnid": "n01984695",
+      "class_name": "spiny_lobster",
+      "imagenet_idx": 123,
+      "class_slot": 18,
+      "filename": "n01984695_23711.JPEG"
+    },
+    {
+      "id": "184",
+      "relpath": "n01984695/n01984695_23774.JPEG",
+      "wnid": "n01984695",
+      "class_name": "spiny_lobster",
+      "imagenet_idx": 123,
+      "class_slot": 18,
+      "filename": "n01984695_23774.JPEG"
+    },
+    {
+      "id": "185",
+      "relpath": "n01984695/n01984695_27026.JPEG",
+      "wnid": "n01984695",
+      "class_name": "spiny_lobster",
+      "imagenet_idx": 123,
+      "class_slot": 18,
+      "filename": "n01984695_27026.JPEG"
+    },
+    {
+      "id": "186",
+      "relpath": "n01984695/n01984695_40314.JPEG",
+      "wnid": "n01984695",
+      "class_name": "spiny_lobster",
+      "imagenet_idx": 123,
+      "class_slot": 18,
+      "filename": "n01984695_40314.JPEG"
+    },
+    {
+      "id": "187",
+      "relpath": "n01984695/n01984695_50941.JPEG",
+      "wnid": "n01984695",
+      "class_name": "spiny_lobster",
+      "imagenet_idx": 123,
+      "class_slot": 18,
+      "filename": "n01984695_50941.JPEG"
+    },
+    {
+      "id": "188",
+      "relpath": "n01984695/n01984695_51486.JPEG",
+      "wnid": "n01984695",
+      "class_name": "spiny_lobster",
+      "imagenet_idx": 123,
+      "class_slot": 18,
+      "filename": "n01984695_51486.JPEG"
+    },
+    {
+      "id": "189",
+      "relpath": "n01984695/n01984695_93876.JPEG",
+      "wnid": "n01984695",
+      "class_name": "spiny_lobster",
+      "imagenet_idx": 123,
+      "class_slot": 18,
+      "filename": "n01984695_93876.JPEG"
+    }
+  ],
+  "note": "This exact image list is reused in every revision section. Do not resample after seeing results."
+}
