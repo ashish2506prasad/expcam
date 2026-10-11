@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
 
 try:
     from ._path import ensure_pkg_path
@@ -107,6 +108,7 @@ def resolve_run(args: argparse.Namespace):
         getattr(args, "where", "auto"),
         data_root=getattr(args, "data_root", None),
         runs_dir=getattr(args, "out", None),
+        zip_out=getattr(args, "zip_out", None),
     )
     if getattr(args, "out", None) is None:
         args.out = C.RUNS_DIR
@@ -114,7 +116,16 @@ def resolve_run(args: argparse.Namespace):
         args.steps = min(args.steps, 40)
         args.backbones = ["resnet18"]
         args.n_images = args.n_images or 7
-    eval_set = load_eval_set()
+    eval_path = getattr(args, "eval_set", None)
+    eval_set = load_eval_set(eval_path) if eval_path is not None else load_eval_set()
+    if eval_path is not None:
+        from shutil import copy2
+
+        dest = Path(args.out) / "eval_set.json"
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        src = Path(eval_path).resolve()
+        if src.exists() and src != dest.resolve():
+            copy2(src, dest)
     images = _stratified_subset(eval_set["images"], args.n_images)
     device = device_from_flag(args.device)
     return eval_set, images, device

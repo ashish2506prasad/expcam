@@ -29,7 +29,7 @@ from config import (
 )
 from data import load_pil, section0_image_records
 from io_utils import load_json, rows_to_excel, save_json
-from runner import maybe_train_and_eval, run_dir
+from runner import export_spatial_pack, maybe_train_and_eval, run_dir
 from train import TrainConfig, image_seed, log
 from viz import plot_ef1_section0_figures, plot_section0_step_progression_grids
 
@@ -111,11 +111,22 @@ def _plot_ef1_for_backbone(out_root, section, backbone, subset, hline) -> dict:
     return series
 
 
+def _apply_subset_args(args) -> None:
+    """--subset: 2 images/class, slots 0 and 1 (same as freq_expcam --subset)."""
+    if getattr(args, "quick", False):
+        args.section0_per_class = 1
+        args.section0_slots = [0]
+    elif getattr(args, "subset", False):
+        args.section0_per_class = 2
+        args.section0_slots = [0, 1]
+
+
 def run_section0(args) -> None:
     eval_set, _images, device = resolve_run(args)
     out_root = args.out
     section = _section_name(args)
     steps = args.steps
+    _apply_subset_args(args)
     subset = section0_image_records(
         eval_set,
         per_class=args.section0_per_class,
@@ -145,7 +156,7 @@ def run_section0(args) -> None:
                 log_every=args.log_every,
                 no_ce=args.no_ce,
                 record_ef1=True,
-                keep_best_ef1=args.ef1_new_version,
+                keep_best_ef1=True,
                 ef1_version=ef1_version,
                 save_expl_steps=snap_steps,
                 save_expl_dir=str(expl_dir),
@@ -170,6 +181,7 @@ def run_section0(args) -> None:
                 row["ef1_max"] = max(p["ef1"] for p in curve)
                 row["ef1_mean"] = sum(p["ef1"] for p in curve) / len(curve)
             rows.append(row)
+            export_spatial_pack(Path(out_root) / "spatial_masks", backbone, rec, out_dir)
 
         _plot_ef1_for_backbone(out_root, section, backbone, subset, args.ef1_threshold)
         _plot_step_grids_for_backbone(
@@ -178,7 +190,18 @@ def run_section0(args) -> None:
 
     save_json(out_root / section / "ef1_runs.json", rows)
     rows_to_excel(out_root / section / "section0_results.xlsx", {"ef1": rows})
+    save_json(
+        Path(out_root) / "spatial_masks" / "manifest.json",
+        {
+            "n_images": len(subset),
+            "backbones": list(args.backbones),
+            "section": section,
+            "ids": [r["id"] for r in subset],
+            "note": "Per-backbone folders hold masks.pt + x/mask/e PNGs for freq_expcam overlay.",
+        },
+    )
     log(f"Section 0 complete under {out_root / section}")
+    log(f"Spatial packs -> {Path(out_root) / 'spatial_masks' / '{resnet18,vit_b_16}'}")
 
 
 def _threshold_stats(series, tau: float) -> dict:
@@ -197,6 +220,7 @@ def run_section0_figures_only(args) -> None:
     eval_set, _, _device = resolve_run(args)
     out_root = args.out
     section = _section_name(args)
+    _apply_subset_args(args)
     subset = section0_image_records(
         eval_set,
         per_class=args.section0_per_class,
@@ -240,10 +264,15 @@ def main(argv=None):
         help="Override snapshot steps (default: every 40 from step 40).",
     )
     p.add_argument(
+        "--subset",
+        action="store_true",
+        help="2 images per class (eval-set slots 0 and 1). Match freq_expcam --subset.",
+    )
+    p.add_argument(
         "--section0-per-class",
         type=int,
         default=SECTION0_PER_CLASS,
-        help="Images per class for Section 0 training (default: 2).",
+        help="Images per class for Section 0 training (default: 2). Overridden by --subset.",
     )
     p.add_argument(
         "--section0-slots",

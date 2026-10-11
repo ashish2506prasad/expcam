@@ -126,21 +126,8 @@ def load_eval_set(path: Optional[Path] = None) -> Dict:
     if not path.exists():
         return build_eval_set(path=path)
     data = load_json(path)
-    expected_classes = [wnid for wnid in TRAINX_CLASSES if (C.TRAINX_DIR / wnid).is_dir()][
-        : C.N_CLASSES
-    ]
-    if (
-        data.get("n_per_class") != C.N_PER_CLASS
-        or data.get("n_classes") != C.N_CLASSES
-        or data.get("classes") != expected_classes
-    ):
-        print(
-            f"Eval set has n_per_class={data.get('n_per_class')} n_classes={data.get('n_classes')} "
-            f"classes={data.get('classes')} but config wants {C.N_PER_CLASS}/{C.N_CLASSES}/"
-            f"{expected_classes}; rebuilding."
-        )
-        return build_eval_set(path=path, force=True)
     data["root"] = str(C.TRAINX_DIR)
+    print(f"Reusing eval set ({len(data.get('images', []))} images) at {path}", flush=True)
     return data
 
 
@@ -238,7 +225,7 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
 
     args = parse_eval_args(argv)
     data_root = args.data_root or args.root
-    C.apply_where(args.where, data_root=data_root, runs_dir=args.out)
+    C.apply_where(args.where, data_root=data_root, runs_dir=args.out, zip_out=False)
     build_eval_set(root=C.TRAINX_DIR, n_per_class=args.n_per_class, seed=args.seed, force=args.force)
 
 

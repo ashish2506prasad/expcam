@@ -18,15 +18,22 @@ ensure_pkg_path()
 
 USAGE = """EXP-CAM experiments
 
-Local (from the folder that contains trainx/ and expcam/):
-  python -m expcam eval-set --where local --force --out expcam_runs_wo_ce
-  python -m expcam 1 --where local --out expcam_runs_wo_ce --backbones resnet18 vit_b_16
-  python -m expcam 2 --from-section0-knapsack --where local --out expcam_runs_wo_ce
-  python -m expcam 3 --where local --out expcam_runs_wo_ce --backbones resnet18 vit_b_16
+Pixel Section 0 (spatial masks) on the same dataset as freq_expcam:
 
-See expcam/README.md for full Section 1–3 instructions.
+  python __main__.py eval-set --where kaggle --data-root /kaggle/input/<slug>/trainX1_subset \\
+      --eval-set /kaggle/working/freq_expcam_fft/eval_set.json --out /kaggle/working/expcam_spatial
 
-Every experiment reuses eval_set.json under the runs directory.
+  python __main__.py 0 --subset --where kaggle \\
+      --data-root /kaggle/input/<slug>/trainX1_subset \\
+      --eval-set /kaggle/working/freq_expcam_fft/eval_set.json \\
+      --out /kaggle/working/expcam_spatial \\
+      --backbones resnet18 vit_b_16
+
+Download /kaggle/working/expcam_spatial.zip
+Masks: expcam_spatial/spatial_masks/resnet18/{id}_{class}/masks.pt
+       expcam_spatial/spatial_masks/vit_b_16/{id}_{class}/masks.pt
+
+If you omit --eval-set, a new eval_set.json is built (ids will not match freq runs).
 """
 
 

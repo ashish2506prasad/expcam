@@ -10,14 +10,16 @@ from pathlib import Path
 
 PACKAGE_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = PACKAGE_DIR.parent
-TRAINX_DIR = PROJECT_ROOT / "trainx"
+TRAINX_DIR = PROJECT_ROOT / "trainX1_subset"
 RUNS_DIR = PROJECT_ROOT / "expcam_runs"
 EVAL_SET_PATH = RUNS_DIR / "eval_set.json"
 WHERE = "local"
+ZIP_OUT = False
+_ZIP_ATEXIT = False
 
-# Kaggle dataset layout (class folders such as n01440764 live under this root).
-KAGGLE_TRAINX = Path("/kaggle/input/datasets/meashish2003/trainx/trainx")
-KAGGLE_RUNS = Path("/kaggle/working/expcam_runs")
+# Kaggle: class folders (n01484850, …) live under this root. Override with --data-root.
+KAGGLE_TRAINX = Path("/kaggle/input/trainx1-subset/trainX1_subset")
+KAGGLE_RUNS = Path("/kaggle/working/expcam_spatial")
 KAGGLE_WORKING = Path("/kaggle/working")
 
 SEED = 0
@@ -145,14 +147,34 @@ def detect_where() -> str:
     return "local"
 
 
-def apply_where(where: str = "auto", data_root=None, runs_dir=None) -> str:
-    """Switch trainx/ and output roots for local vs Kaggle.
+def zip_runs_dir(runs_dir=None):
+    """Write <runs_dir>.zip next to the output folder (Kaggle-downloadable)."""
+    import shutil
 
-    local:  <repo>/trainx  and  <repo>/expcam_runs
-    kaggle: /kaggle/input/datasets/meashish2003/trainx/trainx
-            and /kaggle/working/expcam_runs
+    runs_dir = Path(runs_dir) if runs_dir is not None else RUNS_DIR
+    runs_dir = runs_dir.resolve()
+    if not runs_dir.is_dir():
+        print(f"[zip] skip, not a directory: {runs_dir}", flush=True)
+        return None
+    archive = Path(shutil.make_archive(str(runs_dir), "zip", root_dir=str(runs_dir)))
+    print(f"[zip] {runs_dir} -> {archive}", flush=True)
+    return archive
+
+
+def maybe_zip_runs(runs_dir=None):
+    if not ZIP_OUT:
+        return None
+    return zip_runs_dir(runs_dir)
+
+
+def apply_where(where: str = "auto", data_root=None, runs_dir=None, zip_out=None) -> str:
+    """Switch image folder and output roots for local vs Kaggle.
+
+    local:  <repo>/trainX1_subset  and  <repo>/expcam_runs
+    kaggle: /kaggle/input/.../trainX1_subset  and  /kaggle/working/expcam_spatial
+    --data-root / --out override those defaults.
     """
-    global PROJECT_ROOT, TRAINX_DIR, RUNS_DIR, EVAL_SET_PATH, WHERE
+    global PROJECT_ROOT, TRAINX_DIR, RUNS_DIR, EVAL_SET_PATH, WHERE, ZIP_OUT, _ZIP_ATEXIT
     if where in (None, "auto"):
         where = detect_where()
     WHERE = where
@@ -162,7 +184,7 @@ def apply_where(where: str = "auto", data_root=None, runs_dir=None) -> str:
         RUNS_DIR = KAGGLE_RUNS
     elif where == "local":
         PROJECT_ROOT = PACKAGE_DIR.parent
-        TRAINX_DIR = PROJECT_ROOT / "trainx"
+        TRAINX_DIR = PROJECT_ROOT / "trainX1_subset"
         RUNS_DIR = PROJECT_ROOT / "expcam_runs"
     else:
         raise ValueError(f"Unknown --where {where!r}; expected local, kaggle, or auto")
@@ -171,7 +193,13 @@ def apply_where(where: str = "auto", data_root=None, runs_dir=None) -> str:
     if runs_dir is not None:
         RUNS_DIR = Path(runs_dir)
     EVAL_SET_PATH = RUNS_DIR / "eval_set.json"
-    print(f"[paths] where={WHERE} trainx={TRAINX_DIR} runs={RUNS_DIR}", flush=True)
+    ZIP_OUT = bool(zip_out) if zip_out is not None else (WHERE == "kaggle")
+    print(f"[paths] where={WHERE} data-root={TRAINX_DIR} out={RUNS_DIR} zip-out={ZIP_OUT}", flush=True)
+    if ZIP_OUT and not _ZIP_ATEXIT:
+        import atexit
+
+        atexit.register(maybe_zip_runs)
+        _ZIP_ATEXIT = True
     return WHERE
 
 
@@ -181,22 +209,41 @@ def add_where_args(p):
         choices=("local", "kaggle", "auto"),
         default="auto",
         help=(
-            "Path layout. local: <repo>/trainx and <repo>/expcam_runs. "
-            "kaggle: /kaggle/input/datasets/meashish2003/trainx/trainx and "
-            "/kaggle/working/expcam_runs. auto: kaggle if /kaggle exists."
+            "Path layout. local: <repo>/trainX1_subset and <repo>/expcam_runs. "
+            "kaggle: trainX1_subset under /kaggle/input and /kaggle/working/expcam_spatial. "
+            "auto: kaggle if /kaggle exists."
         ),
     )
     p.add_argument(
         "--data-root",
         type=Path,
         default=None,
-        help="Override the image folder (must contain n01440764 and the other synsets).",
+        help="Image folder with synset dirs (n01484850, …). Same layout as freq_expcam.",
     )
     p.add_argument(
         "--out",
         type=Path,
         default=None,
-        help="Run directory. Default: expcam_runs (local) or /kaggle/working/expcam_runs (kaggle).",
+        help="Run directory. Default: expcam_runs (local) or /kaggle/working/expcam_spatial (kaggle).",
+    )
+    p.add_argument(
+        "--eval-set",
+        type=Path,
+        default=None,
+        help="Reuse an existing eval_set.json (pass the freq_expcam one so image ids match).",
+    )
+    p.set_defaults(zip_out=None)
+    p.add_argument(
+        "--zip-out",
+        action="store_true",
+        dest="zip_out",
+        help="Zip --out after the run. On by default when --where kaggle.",
+    )
+    p.add_argument(
+        "--no-zip-out",
+        action="store_false",
+        dest="zip_out",
+        help="Do not zip --out.",
     )
     return p
 
