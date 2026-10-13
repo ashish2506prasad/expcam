@@ -21,9 +21,9 @@ except ImportError:
 
 ensure_pkg_path()
 
-from cli import add_common_args, resolve_run
+from cli import add_common_args, lambdas_from_args, resolve_run
 from classifiers import load_classifier, run_with_acts
-from config import AUG_BRIGHTNESS, AUG_ROT_DEG, AUG_TRANSLATE_FRAC, N_BG_DRAWS, DEFAULT_LAMBDAS, figure_dir
+from config import AUG_BRIGHTNESS, AUG_ROT_DEG, AUG_TRANSLATE_FRAC, N_BG_DRAWS, figure_dir
 from data import load_tensor, other_class_records, same_class_records, qualitative_image_ids
 from io_utils import load_json, mean_std, rows_to_excel, save_json
 from metrics import (
@@ -137,7 +137,7 @@ def run_section4(args) -> None:
 
             for tag, x_k in (("geometric", x_geo), ("color_jitter", x_jit)):
                 cfg = TrainConfig(
-                    lambdas=dict(DEFAULT_LAMBDAS),
+                    lambdas=lambdas_from_args(args),
                     steps=args.steps,
                     seed=image_seed(rec["id"], backbone, args.seed) + (1 if tag == "geometric" else 2),
                     log_every=args.log_every,

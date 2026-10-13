@@ -1,4 +1,4 @@
-lso # EXP-CAM
+# EXP-CAM
 
 Experiments for EXP-CAM: sequential loss ablation, mask-budget minimality, and baseline comparisons on the `trainx/` ImageNet subset.
 
@@ -13,6 +13,23 @@ cd /home/medal/21d180009
 # Build or refresh the cached eval set (13 classes × 7 images)
 python -m expcam eval-set --where local --force --out expcam_runs_wo_ce
 ```
+
+## Hyperparameters (Section 0 included)
+
+Editing `training_protocol.json` does **not** change training. That file is a notebook dump and is never loaded.
+
+Live defaults for Section 0 (`python -m expcam 0`) and the other sections come from `config.py`:
+
+- `DEFAULT_LAMBDAS` — λ_act, λ_ce, λ_kl, λ_area, λ_bin, λ_tv, λ_rob
+- `LR`, `STEPS`, `SECTION0_STEPS`, `TEMPERATURE`, `MASK_THRESH`
+
+Override any λ from the command line (same flags as freq_expcam, minus `--lam-energy`):
+
+```bash
+python -m expcam 0 --subset --lam-area 80 --lam-rob 50 --lam-tv 750 --where local --data-root trainX1_subset --out expcam_spatial --backbones resnet18
+```
+
+Also: `--lam-act`, `--lam-ce`, `--lam-kl`, `--lam-bin`. `--steps` and `--no-ce` still apply. After changing weights, retrain; existing `metrics.json` / `masks.pt` are not updated.
 
 ---
 

@@ -17,10 +17,9 @@ except ImportError:
 
 ensure_pkg_path()
 
-from cli import add_common_args, resolve_run
+from cli import add_common_args, lambdas_from_args, resolve_run
 from classifiers import load_classifier
 from config import (
-    DEFAULT_LAMBDAS,
     SECTION0_IMAGE_SLOTS,
     SECTION0_PER_CLASS,
     SECTION0_STEPS,
@@ -136,11 +135,13 @@ def run_section0(args) -> None:
     rows = []
     ef1_version = "new" if args.ef1_new_version else "legacy"
     eval_root = Path(eval_set["root"])
+    lambdas = lambdas_from_args(args)
 
     log(
         f"Section 0  device={device}  subset={len(subset)} images "
         f"({args.section0_per_class}/class)  steps={steps}  section={section}  "
-        f"ef1_version={ef1_version}  snapshots={snap_steps[0]}…{snap_steps[-1] if snap_steps else '—'}"
+        f"ef1_version={ef1_version}  lambdas={lambdas}  "
+        f"snapshots={snap_steps[0]}…{snap_steps[-1] if snap_steps else '—'}"
     )
 
     for backbone in args.backbones:
@@ -150,7 +151,7 @@ def run_section0(args) -> None:
             out_dir = run_dir(out_root, section, backbone, "ef1_full", rec["id"])
             expl_dir = out_dir / "snapshots"
             cfg = TrainConfig(
-                lambdas=dict(DEFAULT_LAMBDAS),
+                lambdas=dict(lambdas),
                 steps=steps,
                 seed=image_seed(rec["id"], backbone, args.seed),
                 log_every=args.log_every,

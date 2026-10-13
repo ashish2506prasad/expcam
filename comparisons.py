@@ -21,9 +21,9 @@ except ImportError:
 ensure_pkg_path()
 
 from baselines import BASELINE_NAMES, compute_heatmap, otsu_binarize, topk_binarize
-from cli import add_common_args, resolve_run
+from cli import add_common_args, lambdas_from_args, resolve_run
 from classifiers import load_classifier
-from config import DEFAULT_LAMBDAS, N_RISE_MASKS, SECTION3_EXP_STEPS, figure_dir
+from config import N_RISE_MASKS, SECTION3_EXP_STEPS, figure_dir
 from data import load_tensor
 from io_utils import ensure_dir, load_json, mean_std, rows_to_excel, save_json
 from metrics import evaluate_explanation, insertion_curve
@@ -56,7 +56,7 @@ def _methods_for(args, bundle) -> list[str]:
 def _train_expcam(bundle, x, rec, exp_dir: Path, args) -> tuple:
     """Train EXP-CAM; return (mask_hard, mask_prob, metrics_dict, train_result)."""
     cfg = TrainConfig(
-        lambdas=dict(DEFAULT_LAMBDAS),
+        lambdas=lambdas_from_args(args),
         steps=args.exp_steps,
         seed=image_seed(rec["id"], bundle.name, args.seed),
         log_every=args.log_every,

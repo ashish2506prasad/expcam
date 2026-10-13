@@ -29,6 +29,10 @@ Pixel Section 0 (spatial masks) on the same dataset as freq_expcam:
       --out /kaggle/working/expcam_spatial \\
       --backbones resnet18 vit_b_16
 
+  python __main__.py 0 --subset --lam-area 80 --lam-rob 50 --where kaggle \\
+      --data-root /kaggle/input/<slug>/trainX1_subset \\
+      --out /kaggle/working/expcam_spatial --backbones resnet18 vit_b_16
+
 Download /kaggle/working/expcam_spatial.zip
 Masks: expcam_spatial/spatial_masks/resnet18/{id}_{class}/masks.pt
        expcam_spatial/spatial_masks/vit_b_16/{id}_{class}/masks.pt

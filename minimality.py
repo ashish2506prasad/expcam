@@ -20,9 +20,9 @@ except ImportError:
 
 ensure_pkg_path()
 
-from cli import add_common_args, resolve_run
+from cli import add_common_args, lambdas_from_args, resolve_run
 from classifiers import load_classifier
-from config import BUDGETS, DEFAULT_LAMBDAS, FIDELITY_TAUS, KNAPSACK_BUDGETS, figure_dir
+from config import BUDGETS, FIDELITY_TAUS, KNAPSACK_BUDGETS, figure_dir
 from data import load_tensor, one_image_per_class, qualitative_image_ids
 from io_utils import ensure_dir, load_json, mean_std, rows_to_excel, save_json
 from metrics import ef1_new_version, evaluate_explanation, fidelity_kl_component, min_sufficient_budget
@@ -83,7 +83,7 @@ def run_section2(args) -> None:
             for rec in images:
                 cfg_name = f"budget_p{p:g}"
                 out_dir = run_dir(out_root, section, backbone, cfg_name, rec["id"])
-                lam = dict(DEFAULT_LAMBDAS)
+                lam = lambdas_from_args(args)
                 lam["area"] = 0.0
                 cfg = TrainConfig(
                     lambdas=lam,

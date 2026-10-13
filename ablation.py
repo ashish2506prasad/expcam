@@ -16,7 +16,7 @@ except ImportError:
 
 ensure_pkg_path()
 
-from cli import add_common_args, resolve_run
+from cli import add_common_args, lambdas_from_args, resolve_run
 from classifiers import load_classifier
 from config import SECTION1_STEPS, SEQUENTIAL_PLOT_ORDER, figure_dir, sequential_configs
 from data import load_tensor, qualitative_image_ids
@@ -108,7 +108,7 @@ def run_ablation(args) -> None:
     eval_set, images, device = resolve_run(args)
     out_root = args.out
     all_rows = []
-    sequential = sequential_configs()
+    sequential = sequential_configs(lambdas_from_args(args))
     if args.quick:
         sequential = {k: sequential[k] for k in ("seq_act", "seq_act_kl_ce_min", "Full") if k in sequential}
 

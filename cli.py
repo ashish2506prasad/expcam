@@ -98,7 +98,31 @@ def add_common_args(p: argparse.ArgumentParser) -> argparse.ArgumentParser:
         action="store_true",
         help="Omit cross-entropy (CE) loss from U-Net training (all backbones).",
     )
+    add_loss_lambda_args(p)
     return p
+
+
+def add_loss_lambda_args(p: argparse.ArgumentParser) -> argparse.ArgumentParser:
+    """CLI overrides for each pixel loss term (λ_act, λ_area, …)."""
+    p.add_argument("--lam-act", type=float, default=None, help="Override config.py λ_act.")
+    p.add_argument("--lam-ce", type=float, default=None, help="Override config.py λ_ce.")
+    p.add_argument("--lam-kl", type=float, default=None, help="Override config.py λ_kl.")
+    p.add_argument("--lam-area", type=float, default=None, help="Override config.py λ_area.")
+    p.add_argument("--lam-bin", type=float, default=None, help="Override config.py λ_bin.")
+    p.add_argument("--lam-tv", type=float, default=None, help="Override config.py λ_tv.")
+    p.add_argument("--lam-rob", type=float, default=None, help="Override config.py λ_rob.")
+    return p
+
+
+def lambdas_from_args(args, base: dict | None = None) -> dict:
+    import config as C
+
+    out = dict(base if base is not None else C.DEFAULT_LAMBDAS)
+    for key in C.LOSS_TERMS:
+        val = getattr(args, f"lam_{key}", None)
+        if val is not None:
+            out[key] = float(val)
+    return out
 
 
 def resolve_run(args: argparse.Namespace):

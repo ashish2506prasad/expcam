@@ -254,30 +254,31 @@ def lambdas_with_overrides(**overrides) -> dict:
     return out
 
 
-def sequential_configs() -> dict:
+def sequential_configs(base: dict | None = None) -> dict:
     """Cumulative loss addition ending with the full model (+ L_rob)."""
-    zero = {k: 0.0 for k in DEFAULT_LAMBDAS}
+    src = dict(base if base is not None else DEFAULT_LAMBDAS)
+    zero = {k: 0.0 for k in src}
     cfgs = {}
 
     lam = dict(zero)
-    lam["act"] = DEFAULT_LAMBDAS["act"]
+    lam["act"] = src["act"]
     cfgs["seq_act"] = lam
 
     lam = dict(cfgs["seq_act"])
-    lam["kl"] = DEFAULT_LAMBDAS["kl"]
+    lam["kl"] = src["kl"]
     cfgs["seq_act_kl"] = lam
 
     lam = dict(cfgs["seq_act_kl"])
-    lam["ce"] = DEFAULT_LAMBDAS["ce"]
+    lam["ce"] = src["ce"]
     cfgs["seq_act_kl_ce"] = lam
 
     lam = dict(cfgs["seq_act_kl_ce"])
-    lam["area"] = DEFAULT_LAMBDAS["area"]
-    lam["bin"] = DEFAULT_LAMBDAS["bin"]
-    lam["tv"] = DEFAULT_LAMBDAS["tv"]
+    lam["area"] = src["area"]
+    lam["bin"] = src["bin"]
+    lam["tv"] = src["tv"]
     cfgs["seq_act_kl_ce_min"] = lam
 
-    cfgs["Full"] = dict(DEFAULT_LAMBDAS)
+    cfgs["Full"] = dict(src)
     return cfgs
 
 
