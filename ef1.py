@@ -20,7 +20,6 @@ ensure_pkg_path()
 from cli import add_common_args, lambdas_from_args, resolve_run
 from classifiers import load_classifier
 from config import (
-    SECTION0_IMAGE_SLOTS,
     SECTION0_PER_CLASS,
     SECTION0_STEPS,
     ef1_snapshot_steps,
@@ -129,7 +128,7 @@ def run_section0(args) -> None:
     subset = section0_image_records(
         eval_set,
         per_class=args.section0_per_class,
-        slots=tuple(args.section0_slots),
+        slots=None if getattr(args, "section0_slots", None) is None else tuple(args.section0_slots),
     )
     snap_steps = tuple(args.snapshot_steps) if args.snapshot_steps else ef1_snapshot_steps(max_step=steps)
     rows = []
@@ -225,7 +224,7 @@ def run_section0_figures_only(args) -> None:
     subset = section0_image_records(
         eval_set,
         per_class=args.section0_per_class,
-        slots=tuple(args.section0_slots),
+        slots=None if getattr(args, "section0_slots", None) is None else tuple(args.section0_slots),
     )
     grid_every = tuple(args.step_grid_every)
     eval_root = Path(eval_set["root"])
@@ -273,14 +272,14 @@ def main(argv=None):
         "--section0-per-class",
         type=int,
         default=SECTION0_PER_CLASS,
-        help="Images per class for Section 0 training (default: 2). Overridden by --subset.",
+        help="Images per class for Section 0 (default: all eval-set images per class). Overridden by --subset.",
     )
     p.add_argument(
         "--section0-slots",
         type=int,
         nargs="+",
-        default=list(SECTION0_IMAGE_SLOTS),
-        help="Eval-set slot indices per class (default: 2 5 = 3rd & 6th image).",
+        default=None,
+        help="Eval-set slot indices per class. Default: 0 … --section0-per-class-1.",
     )
     p.add_argument(
         "--figures-only",

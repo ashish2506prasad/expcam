@@ -21,7 +21,6 @@ from config import (
     N_CLASSES,
     N_PER_CLASS,
     QUALITATIVE_PER_CLASS,
-    SECTION0_IMAGE_SLOTS,
     SECTION0_PER_CLASS,
     SEED,
     TRAINX_CLASSES,
@@ -31,6 +30,20 @@ from io_utils import load_json, save_json
 
 
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".JPEG", ".JPG", ".PNG", ".bmp"}
+
+
+def eligible_trainx_classes(root: Path, n_per_class: int) -> List[str]:
+    """Synsets in TRAINX_CLASSES that exist under root and have ≥ n_per_class images."""
+    out = []
+    for wnid in TRAINX_CLASSES:
+        folder = root / wnid
+        if not folder.is_dir():
+            continue
+        n = len(list_class_images(root, wnid))
+        if n < n_per_class:
+            continue
+        out.append(wnid)
+    return out
 
 
 def list_class_images(root: Path, wnid: str) -> List[Path]:
@@ -66,12 +79,18 @@ def build_eval_set(
 
     rng = np.random.RandomState(seed)
     images = []
-    classes_present = [wnid for wnid in TRAINX_CLASSES if (root / wnid).is_dir()]
-    if len(classes_present) < N_CLASSES:
+    classes_present = eligible_trainx_classes(root, n_per_class)
+    skipped = [wnid for wnid in TRAINX_CLASSES if (root / wnid).is_dir() and wnid not in classes_present]
+    for wnid in skipped:
+        n = len(list_class_images(root, wnid))
+        print(f"[eval-set] skip {wnid} ({TRAINX_CLASSES[wnid]['name']}): {n} images < {n_per_class}")
+    n_want = N_CLASSES if N_CLASSES is not None else len(classes_present)
+    if len(classes_present) < (N_CLASSES or 1):
         raise RuntimeError(
-            f"Need at least {N_CLASSES} classes in {root}; found {len(classes_present)}: {classes_present}"
+            f"Need at least {N_CLASSES or 1} class folder(s) in {root} with ≥{n_per_class} images; "
+            f"found {len(classes_present)}: {classes_present}"
         )
-    classes_present = classes_present[:N_CLASSES]
+    classes_present = classes_present[:n_want]
     for class_i, wnid in enumerate(classes_present):
         files = list_class_images(root, wnid)
         if len(files) < n_per_class:
@@ -173,18 +192,24 @@ def section0_image_records(
     per_class: Optional[int] = None,
     slots: Optional[Sequence[int]] = None,
 ) -> List[Dict]:
-    """Section 0 subset: fixed slots per class (default 3rd & 6th, not qualitative 1st/2nd)."""
+    """Section 0 subset: ``per_class`` images from each class.
+
+    If ``slots`` is omitted, use the first ``per_class`` eval-set images
+    (indices 0, 1, …). Passing ``slots`` picks those indices instead.
+    """
     if per_class is None:
         per_class = SECTION0_PER_CLASS
     if slots is None:
-        slots = SECTION0_IMAGE_SLOTS
+        slots = tuple(range(int(per_class)))
+    else:
+        slots = tuple(int(s) for s in slots)
     by_class = records_by_class(eval_set)
     class_order = eval_set.get("classes") or sorted(by_class.keys())
     out: List[Dict] = []
     for wnid in class_order:
         recs = by_class.get(wnid, [])
-        for slot in slots[:per_class]:
-            if slot < len(recs):
+        for slot in slots[: int(per_class)]:
+            if 0 <= slot < len(recs):
                 out.append(recs[slot])
     return out
 

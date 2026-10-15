@@ -23,12 +23,12 @@ KAGGLE_RUNS = Path("/kaggle/working/expcam_spatial")
 KAGGLE_WORKING = Path("/kaggle/working")
 
 SEED = 0
-N_CLASSES = 13
-N_IMAGES = 91  # 7 per class × 13 trainx classes (bottleneck: n01749939 has 7)
+# None = every TRAINX_CLASSES folder with at least N_PER_CLASS images.
+N_CLASSES = None
 N_PER_CLASS = 20
-QUALITATIVE_PER_CLASS = 2  # images per class in Fig A11, B5, C4, E4, etc.
-SECTION0_PER_CLASS = 2  # Section 0 trains 2 images per class
-SECTION0_IMAGE_SLOTS = (2, 5)  # 3rd & 6th eval image (qualitative uses slots 0,1)
+QUALITATIVE_PER_CLASS = 2
+SECTION0_PER_CLASS = 20
+SECTION0_IMAGE_SLOTS = tuple(range(N_PER_CLASS))
 SECTION0_STEPS = 400
 SECTION0_EF1_SNAPSHOT_START = 0
 SECTION0_EF1_SNAPSHOT_EVERY = 40
@@ -104,6 +104,12 @@ TRAINX_CLASSES = {
     "n02012849": {"name": "crane", "imagenet_idx": 134},
     "n02018795": {"name": "bustard", "imagenet_idx": 138},
     "n02037110": {"name": "oystercatcher", "imagenet_idx": 143},
+    "n01914609": {"name": "jellyfish", "imagenet_idx": 107},
+    "n01924916": {"name": "flatworm", "imagenet_idx": 110},
+    "n01930112": {"name": "nematode", "imagenet_idx": 111},
+    "n01950731": {"name": "sea_slug", "imagenet_idx": 115},
+    "n01978455": {"name": "rock_crab", "imagenet_idx": 119},
+    "n01984695": {"name": "spiny_lobster", "imagenet_idx": 123},
 }
 
 
