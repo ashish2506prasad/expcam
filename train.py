@@ -20,7 +20,7 @@ except ImportError:
 ensure_pkg_path()
 
 from classifiers import ClassifierBundle, run_with_acts
-from config import DEFAULT_LAMBDAS, LR, MASK_THRESH, ROB_K_BACKGROUNDS, SEED, STEPS, TEMPERATURE
+from config import DEFAULT_LAMBDAS, LR, MASK_MODEL, MASK_THRESH, ROB_K_BACKGROUNDS, SEED, STEPS, TEMPERATURE
 from metrics import confidence_delta, ef1_new_version, explanation_f1
 from losses import (
     abductive_loss,
@@ -35,7 +35,7 @@ from losses import (
     sample_gaussian_backgrounds,
     tv8_loss,
 )
-from models import UNetCSAE
+from models import PixelMask, UNetCSAE
 
 
 def log(msg: str) -> None:
@@ -82,6 +82,7 @@ class TrainConfig:
     ef1_version: str = "legacy"  # "legacy" | "new" (ef1_new_version in metrics.py)
     save_expl_steps: Optional[Sequence[int]] = None
     save_expl_dir: Optional[str] = None
+    mask_model: Optional[str] = None  # None → config.MASK_MODEL ("unet" | "none")
 
 
 @dataclass
@@ -109,7 +110,15 @@ def train_mask(
 ) -> TrainResult:
     device = x.device
     seed_all(cfg.seed)
-    mask_net = UNetCSAE().to(device)
+    model_name = str(cfg.mask_model or MASK_MODEL).strip().lower()
+    if model_name in ("none", "pixel", "direct"):
+        mask_net = PixelMask(int(x.shape[-2]), int(x.shape[-1])).to(device)
+        arch = "PixelMask"
+    elif model_name in ("unet", "unet_csae"):
+        mask_net = UNetCSAE().to(device)
+        arch = "UNetCSAE"
+    else:
+        raise ValueError(f"Unknown mask_model={model_name!r}; expected 'unet' or 'none'")
     mask_net.train()
     opt = torch.optim.Adam(mask_net.parameters(), lr=cfg.lr)
 
@@ -140,7 +149,7 @@ def train_mask(
     t0 = time.perf_counter()
     if cfg.log_every:
         log(
-            f"  training U-Net  steps={cfg.steps}  lr={cfg.lr}  seed={cfg.seed}"
+            f"  training {arch}  steps={cfg.steps}  lr={cfg.lr}  seed={cfg.seed}"
             + (f"  constraint={cfg.constraint} p={cfg.p_target}" if cfg.constraint else "")
         )
     for t in range(1, cfg.steps + 1):

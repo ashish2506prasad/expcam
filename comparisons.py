@@ -63,6 +63,7 @@ def _train_expcam(bundle, x, rec, exp_dir: Path, args) -> tuple:
         no_ce=args.no_ce,
         record_ef1=True,
         keep_best_ef1=True,
+        mask_model=getattr(args, "mask_model", None),
     )
     log(
         f"  [EXP-CAM train] steps={cfg.steps}  no_ce={cfg.no_ce}  "

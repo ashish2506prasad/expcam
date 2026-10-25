@@ -160,6 +160,7 @@ def run_section0(args) -> None:
                 ef1_version=ef1_version,
                 save_expl_steps=snap_steps,
                 save_expl_dir=str(expl_dir),
+                mask_model=getattr(args, "mask_model", None),
             )
             row = maybe_train_and_eval(
                 bundle,

@@ -93,6 +93,7 @@ def run_section2(args) -> None:
                     p_target=p,
                     log_every=args.log_every,
                     no_ce=args.no_ce,
+                    mask_model=getattr(args, "mask_model", None),
                 )
                 row = maybe_train_and_eval(
                     bundle,

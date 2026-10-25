@@ -67,6 +67,7 @@ def _train_cfg(args, rec, backbone, **extra) -> TrainConfig:
         no_ce=False,
         record_ef1=True,
         keep_best_ef1=True,
+        mask_model=getattr(args, "mask_model", None),
         **extra,
     )
 

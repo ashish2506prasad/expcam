@@ -14,7 +14,7 @@ ensure_pkg_path()
 
 import torch
 
-from config import DEFAULT_BACKBONES, SEED, STEPS, add_where_args
+from config import DEFAULT_BACKBONES, MASK_MODEL, SEED, STEPS, add_where_args
 from data import load_eval_set
 
 _CUDA_OK = None
@@ -97,6 +97,12 @@ def add_common_args(p: argparse.ArgumentParser) -> argparse.ArgumentParser:
         "--no-ce",
         action="store_true",
         help="Omit cross-entropy (CE) loss from U-Net training (all backbones).",
+    )
+    p.add_argument(
+        "--mask-model",
+        choices=("unet", "none"),
+        default=None,
+        help=f"Mask generator: unet or none (direct HxW pixel mask). Default: {MASK_MODEL} from config.py.",
     )
     add_loss_lambda_args(p)
     return p

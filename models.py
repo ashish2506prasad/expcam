@@ -83,8 +83,22 @@ class UNetCSAE(nn.Module):
         return self.out_conv(u1)
 
 
+class PixelMask(nn.Module):
+    """Learnable 1-channel mask, same spatial size as the image. No U-Net."""
+
+    def __init__(self, height: int, width: int, init: float = 0.0):
+        super().__init__()
+        self.logits = nn.Parameter(torch.full((1, 1, int(height), int(width)), float(init)))
+
+    def forward(self, x=None):
+        return self.logits
+
+
 def last_shared_layer(mask_net: nn.Module) -> nn.Module:
     """Last layer used by all decoder branches (for GradNorm-style balancing)."""
+    if isinstance(mask_net, PixelMask):
+        return mask_net
     if isinstance(mask_net, UNetCSAE):
         return mask_net.dec1
     return mask_net.dec3
+
