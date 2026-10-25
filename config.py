@@ -59,7 +59,7 @@ TEMPERATURE = 2.0
 MASK_THRESH = 0.5
 ROB_K_BACKGROUNDS = 3
 # "unet" = UNetCSAE; "none" = optimize a 1-channel HxW mask directly (no generator).
-MASK_MODEL = "unet"
+MASK_MODEL = "none"
 
 DEFAULT_LAMBDAS = {
     "act": 10.0,
