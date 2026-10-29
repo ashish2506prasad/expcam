@@ -35,7 +35,7 @@ from losses import (
     sample_gaussian_backgrounds,
     tv8_loss,
 )
-from models import PixelMask, UNetCSAE
+from models import PixelMask, TinyCSAE, TinyUnetCSAE, UNetCSAE
 
 
 def log(msg: str) -> None:
@@ -117,8 +117,16 @@ def train_mask(
     elif model_name in ("unet", "unet_csae"):
         mask_net = UNetCSAE().to(device)
         arch = "UNetCSAE"
+    elif model_name in ("tiny_unet", "tinyunet", "tiny_unet_csae"):
+        mask_net = TinyUnetCSAE().to(device)
+        arch = "TinyUnetCSAE"
+    elif model_name in ("tiny_csae", "tinycsae"):
+        mask_net = TinyCSAE().to(device)
+        arch = "TinyCSAE"
     else:
-        raise ValueError(f"Unknown mask_model={model_name!r}; expected 'unet' or 'none'")
+        raise ValueError(
+            f"Unknown mask_model={model_name!r}; expected 'unet', 'tiny_unet', 'tiny_csae', or 'none'"
+        )
     mask_net.train()
     opt = torch.optim.Adam(mask_net.parameters(), lr=cfg.lr)
 

@@ -100,9 +100,12 @@ def add_common_args(p: argparse.ArgumentParser) -> argparse.ArgumentParser:
     )
     p.add_argument(
         "--mask-model",
-        choices=("unet", "none"),
+        choices=("unet", "tiny_unet", "tiny_csae", "none"),
         default=None,
-        help=f"Mask generator: unet or none (direct HxW pixel mask). Default: {MASK_MODEL} from config.py.",
+        help=(
+            "Mask generator: unet, tiny_unet, tiny_csae, or none (direct HxW pixel mask). "
+            f"Default: {MASK_MODEL} from config.py."
+        ),
     )
     add_loss_lambda_args(p)
     return p

@@ -58,7 +58,7 @@ OPTIMIZER_NAME = "adam"
 TEMPERATURE = 2.0
 MASK_THRESH = 0.5
 ROB_K_BACKGROUNDS = 3
-# "unet" = UNetCSAE; "none" = optimize a 1-channel HxW mask directly (no generator).
+# "unet" | "tiny_unet" | "tiny_csae" | "none" (direct HxW pixel mask).
 MASK_MODEL = "none"
 
 DEFAULT_LAMBDAS = {

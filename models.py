@@ -94,11 +94,48 @@ class PixelMask(nn.Module):
         return self.logits
 
 
+class TinyCSAE(nn.Module):
+    """Two-scale conv autoencoder: 224→112→56→112→224, 1-channel logits."""
+
+    def __init__(self):
+        super().__init__()
+        self.enc1 = nn.Conv2d(3, 16, 3, stride=2, padding=1)
+        self.enc2 = nn.Conv2d(16, 32, 3, stride=2, padding=1)
+        self.dec1 = nn.ConvTranspose2d(32, 16, 4, stride=2, padding=1)
+        self.dec2 = nn.ConvTranspose2d(16, 1, 4, stride=2, padding=1)
+
+    def forward(self, x):
+        x = F.relu(self.enc1(x))
+        z = F.relu(self.enc2(x))
+        x = F.relu(self.dec1(z))
+        return self.dec2(x)
+
+
+class TinyUnetCSAE(nn.Module):
+    """One-skip U-Net: 16/32 channels, 224→112→224."""
+
+    def __init__(self):
+        super().__init__()
+        self.down1 = DoubleConv(3, 16)
+        self.pool1 = nn.MaxPool2d(2)
+        self.bottleneck = DoubleConv(16, 32)
+        self.up1 = nn.ConvTranspose2d(32, 16, 2, stride=2)
+        self.dec1 = DoubleConv(32, 16)
+        self.out_conv = nn.Conv2d(16, 1, kernel_size=1)
+
+    def forward(self, x):
+        d1 = self.down1(x)
+        bn = self.bottleneck(self.pool1(d1))
+        u1 = self.dec1(torch.cat([self.up1(bn), d1], dim=1))
+        return self.out_conv(u1)
+
+
 def last_shared_layer(mask_net: nn.Module) -> nn.Module:
     """Last layer used by all decoder branches (for GradNorm-style balancing)."""
     if isinstance(mask_net, PixelMask):
         return mask_net
-    if isinstance(mask_net, UNetCSAE):
+    if isinstance(mask_net, (UNetCSAE, TinyUnetCSAE)):
+        return mask_net.dec1
+    if isinstance(mask_net, TinyCSAE):
         return mask_net.dec1
     return mask_net.dec3
-

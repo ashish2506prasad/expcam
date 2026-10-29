@@ -108,11 +108,18 @@ def maybe_train_and_eval(
             "optimizer": "Adam",
             "lr": cfg.lr,
             "per_image": True,
-            "architecture": (
-                "PixelMask"
-                if str(cfg.mask_model or MASK_MODEL).strip().lower() in ("none", "pixel", "direct")
-                else "UNetCSAE"
-            ),
+            "architecture": {
+                "none": "PixelMask",
+                "pixel": "PixelMask",
+                "direct": "PixelMask",
+                "unet": "UNetCSAE",
+                "unet_csae": "UNetCSAE",
+                "tiny_unet": "TinyUnetCSAE",
+                "tinyunet": "TinyUnetCSAE",
+                "tiny_unet_csae": "TinyUnetCSAE",
+                "tiny_csae": "TinyCSAE",
+                "tinycsae": "TinyCSAE",
+            }.get(str(cfg.mask_model or MASK_MODEL).strip().lower(), "UNetCSAE"),
             "mask_model": str(cfg.mask_model or MASK_MODEL),
         },
     )
