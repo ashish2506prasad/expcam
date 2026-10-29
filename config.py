@@ -59,7 +59,7 @@ TEMPERATURE = 2.0
 MASK_THRESH = 0.5
 ROB_K_BACKGROUNDS = 3
 # "unet" | "tiny_unet" | "tiny_csae" | "none" (direct HxW pixel mask).
-MASK_MODEL = "none"
+MASK_MODEL = "tiny_unet"
 
 DEFAULT_LAMBDAS = {
     "act": 10.0,
