@@ -63,7 +63,7 @@ ROB_K_BACKGROUNDS = 3
 AREA_SWEEP = (50.0, 70.0, 90.0, 120.0)
 MASK_THRESH_SWEEP = (0.30, 0.40, 0.50, 0.60, 0.70)
 # "unet" | "tiny_unet" | "tiny_csae" | "none" (direct HxW pixel mask).
-MASK_MODEL = "tiny_unet"
+MASK_MODEL = "none"
 
 DEFAULT_LAMBDAS = {
     "act": 10.0,
