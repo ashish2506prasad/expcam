@@ -51,8 +51,8 @@ def figure_dir(out_root: Path, section: str, backbone: str) -> Path:
     return Path(out_root) / section / sub
 
 # Per-image U-Net training (AM6 cell 15 / AM4–AM5 full-model cells)
-STEPS = 700
-SECTION1_STEPS = 300
+STEPS = 400
+SECTION1_STEPS = 400
 LR = 5e-5
 OPTIMIZER_NAME = "adam"
 TEMPERATURE = 2.0
@@ -60,7 +60,7 @@ MASK_THRESH = 0.5
 ROB_K_BACKGROUNDS = 3
 # Section 2 sensitivity: EF1 vs p_area for each λ_area / mask threshold.
 # Include the defaults (DEFAULT_LAMBDAS["area"], MASK_THRESH) so the star lands on a line.
-AREA_SWEEP = (50.0, 70.0, 100.0, 150.0, 200.0)
+AREA_SWEEP = (50.0, 70.0, 90.0, 120.0)
 MASK_THRESH_SWEEP = (0.30, 0.40, 0.50, 0.60, 0.70)
 # "unet" | "tiny_unet" | "tiny_csae" | "none" (direct HxW pixel mask).
 MASK_MODEL = "tiny_unet"
