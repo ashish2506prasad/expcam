@@ -25,8 +25,10 @@ from cli import add_common_args, lambdas_from_args, resolve_run
 from classifiers import load_classifier
 from config import N_RISE_MASKS, SECTION3_EXP_STEPS, figure_dir
 from data import load_tensor
-from io_utils import ensure_dir, load_json, mean_std, rows_to_excel, save_json
-from metrics import evaluate_explanation, insertion_curve
+from dd_cam import ddcam_heatmap
+from io_utils import ensure_dir, export_metric_csvs, load_json, mean_std, rows_to_excel, save_json
+from metrics import CAM_TABLE_KEYS, evaluate_explanation, insertion_curve
+from runner import load_masks, run_dir
 from train import TrainConfig, image_seed, log, save_mask_tensors, train_mask
 from viz import (
     caption,
@@ -50,7 +52,86 @@ def _methods_for(args, bundle) -> list[str]:
     names = list(BASELINE_NAMES)
     if not bundle.cam_is_vit:
         names = [n for n in names if n != "attention"]
+    if "ddcam" not in names:
+        names.append("ddcam")
     return names
+
+
+def _section0_mask_dir(args, backbone: str, image_id: str) -> Path:
+    candidates = []
+    src = getattr(args, "section0_source", None)
+    if src:
+        candidates.append(src)
+    candidates.extend(("section0", "section0_new_score"))
+    seen = set()
+    for name in candidates:
+        if name in seen:
+            continue
+        seen.add(name)
+        d = run_dir(args.out, name, backbone, "ef1_full", image_id)
+        if (d / "masks.pt").exists():
+            return d
+    return run_dir(args.out, candidates[0], backbone, "ef1_full", image_id)
+
+
+def _copy_section0_expcam(s0: Path, exp_dir: Path) -> None:
+    import shutil
+
+    ensure_dir(exp_dir)
+    for name in ("masks.pt", "metrics.json", "ef1_curve.json", "train_meta.json"):
+        src = s0 / name
+        if src.exists():
+            shutil.copy2(src, exp_dir / name)
+
+
+def _expcam_from_section0(bundle, x, rec, dest: Path, args, device):
+    """Reuse Section 0 mask; do not retrain. Returns None if missing."""
+    s0 = _section0_mask_dir(args, bundle.name, rec["id"])
+    if not (s0 / "masks.pt").exists():
+        return None
+    exp_dir = ensure_dir(dest / "expcam")
+    _copy_section0_expcam(s0, exp_dir)
+    m_hard, m_prob = load_masks(s0, device)
+    met = evaluate_explanation(bundle, x, m_hard, mask_prob=m_prob)
+    if (s0 / "metrics.json").exists():
+        old = load_json(s0 / "metrics.json")
+        for k in ("best_ef1", "best_ef1_step", "seconds", "lambdas"):
+            if k in old:
+                met[k] = old[k]
+    xs, ys, auc = insertion_curve(bundle, x, m_prob[0, 0], binary_mask=False)
+    met["insertion_auc"] = auc
+    save_json(exp_dir / "metrics.json", met)
+    return m_hard, m_prob, met, (xs, ys, auc)
+
+
+def _metric_row(rec, backbone, method, mode, met, extra=None) -> dict:
+    row = {
+        "image_id": rec["id"],
+        "wnid": rec["wnid"],
+        "class_name": rec["class_name"],
+        "backbone": backbone,
+        "method": method,
+        "mode": mode,
+        "p_actual": met.get("p_actual"),
+        "conf_e": met.get("conf_e"),
+        "conf_x": met.get("conf_x"),
+        "top1_agreement": met.get("top1_agreement"),
+        "ad": met.get("ad"),
+        "ic": met.get("ic"),
+        "com": met.get("com"),
+        "coh": met.get("coh"),
+        "adcc": met.get("adcc"),
+        "add": met.get("add"),
+        "ef1": met.get("ef1"),
+        "ef1_conf": met.get("ef1_conf"),
+        "kl_divergence": met.get("kl_divergence"),
+        "insertion_auc": met.get("insertion_auc"),
+        "best_ef1": met.get("best_ef1"),
+        "best_ef1_step": met.get("best_ef1_step"),
+    }
+    if extra:
+        row.update(extra)
+    return row
 
 
 def _train_expcam(bundle, x, rec, exp_dir: Path, args) -> tuple:
@@ -122,61 +203,46 @@ def run_section3(args) -> None:
             x = load_tensor(rec, bundle.preprocess, device, root=Path(eval_set["root"]))
             log(f"[baselines] {backbone} img={rec['id']} {rec['class_name']}")
 
-            exp_dir = ensure_dir(dest / "expcam")
-            m_exp, p_exp, exp_metrics, _result = _train_expcam(bundle, x, rec, exp_dir, args)
+            train_exp = bool(getattr(args, "train_expcam", False))
+            loaded = None if train_exp else _expcam_from_section0(bundle, x, rec, dest, args, device)
+            if loaded is None and train_exp:
+                exp_dir = ensure_dir(dest / "expcam")
+                m_exp, p_exp, exp_metrics, _result = _train_expcam(bundle, x, rec, exp_dir, args)
+                xs, ys, auc = insertion_curve(bundle, x, p_exp[0, 0], binary_mask=False)
+                exp_metrics["insertion_auc"] = auc
+                loaded = (m_exp, p_exp, exp_metrics, (xs, ys, auc))
+            if loaded is None:
+                log(f"[skip] no Section 0 mask for {backbone} img={rec['id']} — run section 0 first")
+                continue
+
+            m_exp, p_exp, exp_metrics, curve_e = loaded
             k = int(m_exp.sum().item())
             _save_explanation(dest, "EXP-CAM", x, m_exp, heatmap=False)
-
-            xs, ys, auc = insertion_curve(bundle, x, p_exp[0, 0], binary_mask=False)
-            rows.append(
-                {
-                    "image_id": rec["id"],
-                    "wnid": rec["wnid"],
-                    "class_name": rec["class_name"],
-                    "backbone": backbone,
-                    "method": "EXP-CAM",
-                    "mode": "size_matched",
-                    "p_actual": exp_metrics["p_actual"],
-                    "conf_e": exp_metrics["conf_e"],
-                    "top1_agreement": exp_metrics["top1_agreement"],
-                    "insertion_auc": auc,
-                    "best_ef1": exp_metrics.get("best_ef1"),
-                    "best_ef1_step": exp_metrics.get("best_ef1_step"),
-                    "no_ce": args.no_ce,
-                }
-            )
-            curves[("EXP-CAM", backbone)].append((xs, ys, auc))
+            rows.append(_metric_row(rec, backbone, "EXP-CAM", "size_matched", exp_metrics, {"no_ce": args.no_ce}))
+            curves[("EXP-CAM", backbone)].append(curve_e)
 
             for name in methods:
-                cam = compute_heatmap(name, bundle, x, rise_masks=rise_masks)
+                if name == "ddcam":
+                    cam = ddcam_heatmap(bundle, x)
+                    disp = "DD-CAM"
+                else:
+                    cam = compute_heatmap(name, bundle, x, rise_masks=rise_masks)
+                    disp = name
                 if cam is None:
                     continue
-                log(f"  {name} done")
+                log(f"  {disp} done")
                 cam = cam.detach()
                 matched = topk_binarize(cam, k).view(1, 1, *cam.shape[-2:])
                 own = otsu_binarize(cam).view(1, 1, *cam.shape[-2:])
-                _save_explanation(dest, name, x, cam, heatmap=True)
+                _save_explanation(dest, disp, x, cam, heatmap=True)
 
                 for mode, mask in (("size_matched", matched), ("own_threshold", own)):
                     met = evaluate_explanation(bundle, x, mask, mask_prob=cam.view(1, 1, *cam.shape))
                     xs_i, ys_i, auc_i = insertion_curve(bundle, x, cam, binary_mask=False)
-                    rows.append(
-                        {
-                            "image_id": rec["id"],
-                            "wnid": rec["wnid"],
-                            "class_name": rec["class_name"],
-                            "backbone": backbone,
-                            "method": name,
-                            "mode": mode,
-                            "p_actual": met["p_actual"],
-                            "conf_e": met["conf_e"],
-                            "top1_agreement": met["top1_agreement"],
-                            "insertion_auc": auc_i,
-                            "no_ce": args.no_ce,
-                        }
-                    )
+                    met["insertion_auc"] = auc_i
+                    rows.append(_metric_row(rec, backbone, disp, mode, met, {"no_ce": args.no_ce}))
                     if mode == "size_matched":
-                        curves[(name, backbone)].append((xs_i, ys_i, auc_i))
+                        curves[(disp, backbone)].append((xs_i, ys_i, auc_i))
 
                 save_json(dest / f"{name}.json", {"k": k, "cam_max": float(cam.max().item())})
                 torch.save(
@@ -191,11 +257,15 @@ def run_section3(args) -> None:
                     "backbone": backbone,
                     "methods": ["EXP-CAM", *methods],
                     "explanations_dir": str(dest / "explanations"),
+                    "expcam_from_section0": not train_exp,
                 },
             )
 
     save_json(out_root / "all_runs.json", rows)
     rows_to_excel(out_root / "section3_results.xlsx", {"baselines": rows})
+    cam_keys = [k for k in CAM_TABLE_KEYS if any(r.get(k) is not None for r in rows)]
+    export_metric_csvs(out_root, rows, "comparison", cam_keys, extra_groups=("method", "mode"))
+    log(f"Comparison CSV -> {out_root / 'comparison_summary.csv'}")
     _figures(eval_set, images, args, rows, curves, device)
 
 
@@ -255,7 +325,8 @@ def _comparison_row(
     row.append((panel_expl(x, m_exp), f"EXP-CAM\n{cap_exp}"))
 
     for name in _method_cols(bundle)[1:]:
-        pt = dest / f"{name}.pt"
+        stem = "ddcam" if name == "DD-CAM" else name
+        pt = dest / f"{stem}.pt"
         if not pt.exists():
             continue
         blob = torch.load(pt, map_location=device)
@@ -265,7 +336,7 @@ def _comparison_row(
             cap = _fair_method_caption(bundle, x, device, blob)
             row.append((img, f"{name}\n{cap}"))
         else:
-            panel = _load_cam_heatmap_panel(x, dest, name, device)
+            panel = _load_cam_heatmap_panel(x, dest, stem, device)
             if panel is None:
                 continue
             row.append((panel, name))
@@ -452,6 +523,31 @@ def _figures_for_backbone(eval_set, images, args, rows, curves, device, backbone
         f"Fig C3 — own-threshold vs size-matched ({backbone})",
     )
 
+    for key, ylabel, fname in (
+        ("ad", "Average Drop (↓)", "FigC6_AD.png"),
+        ("ic", "Increase in Confidence (↑)", "FigC6_IC.png"),
+        ("com", "Complexity / p_area (↓)", "FigC6_Com.png"),
+        ("adcc", "ADCC (↑)", "FigC6_ADCC.png"),
+        ("add", "ADD deletion drop (↑)", "FigC6_ADD.png"),
+    ):
+        means, stds = [], []
+        for m in methods:
+            vals = [
+                r[key]
+                for r in matched
+                if r["method"] == m and r.get(key) is not None
+            ]
+            s = mean_std(vals)
+            means.append(s["mean"] or 0)
+            stds.append(s["std"] or 0)
+        grouped_bars(
+            fig_dir / fname,
+            methods,
+            {"size_matched": (means, stds)},
+            ylabel,
+            f"{ylabel} ({backbone})",
+        )
+
     all_rows_list = list(rows)
     _export_per_image_comparisons(eval_set, images, args, device, backbone, fig_dir, all_rows_list)
     grid_ids = _normalize_grid_ids(getattr(args, "grid_ids", None))
@@ -460,7 +556,7 @@ def _figures_for_backbone(eval_set, images, args, rows, curves, device, backbone
 
 
 def _method_cols(bundle) -> list[str]:
-    cols = ["EXP-CAM", "gradcam++", "layercam", "scorecam", "eigencam"]
+    cols = ["EXP-CAM", "DD-CAM", "gradcam++", "layercam", "scorecam", "eigencam"]
     if bundle.cam_is_vit:
         cols.append("attention")
     cols.append("rise")
@@ -521,6 +617,16 @@ def main(argv=None):
         nargs="+",
         default=None,
         help="Image ids for a custom multi-row grid, e.g. --grid-ids 000 010 042",
+    )
+    p.add_argument(
+        "--section0-source",
+        default="section0",
+        help="Section 0 folder under --out to reuse EXP-CAM masks (default: section0).",
+    )
+    p.add_argument(
+        "--train-expcam",
+        action="store_true",
+        help="Retrain EXP-CAM here instead of reusing Section 0 masks.",
     )
     args = p.parse_args(argv)
     if args.comparisons_only:

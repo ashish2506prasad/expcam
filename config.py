@@ -58,6 +58,10 @@ OPTIMIZER_NAME = "adam"
 TEMPERATURE = 2.0
 MASK_THRESH = 0.5
 ROB_K_BACKGROUNDS = 3
+# Section 2 sensitivity: EF1 vs p_area for each λ_area / mask threshold.
+# Include the defaults (DEFAULT_LAMBDAS["area"], MASK_THRESH) so the star lands on a line.
+AREA_SWEEP = (50.0, 70.0, 100.0, 150.0, 200.0)
+MASK_THRESH_SWEEP = (0.30, 0.40, 0.50, 0.60, 0.70)
 # "unet" | "tiny_unet" | "tiny_csae" | "none" (direct HxW pixel mask).
 MASK_MODEL = "tiny_unet"
 

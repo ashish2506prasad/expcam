@@ -18,7 +18,7 @@ from classifiers import ClassifierBundle
 from config import MASK_MODEL
 from data import load_tensor
 from io_utils import load_json, save_json
-from metrics import evaluate_explanation
+from metrics import CAM_FAITHFULNESS_KEYS, evaluate_explanation
 from train import TrainConfig, TrainResult, image_seed, log, save_mask_tensors, train_mask
 
 
@@ -48,10 +48,17 @@ def maybe_train_and_eval(
     if skip_existing and metrics_path.exists():
         log(f"[skip] {who}")
         payload = load_json(metrics_path)
-        if not (out_dir / "x.png").exists() and (out_dir / "masks.pt").exists():
+        need_preview = not (out_dir / "x.png").exists() and (out_dir / "masks.pt").exists()
+        need_cam = any(k not in payload for k in CAM_FAITHFULNESS_KEYS)
+        if need_preview or need_cam:
             x = load_tensor(rec, bundle.preprocess, device, root=eval_root)
             mask_hard, mask_prob = load_masks(out_dir, device)
-            save_spatial_previews(out_dir, x, mask_hard, mask_prob)
+            if need_preview:
+                save_spatial_previews(out_dir, x, mask_hard, mask_prob)
+            if need_cam:
+                payload.update(evaluate_explanation(bundle, x, mask_hard, mask_prob=mask_prob))
+                save_json(metrics_path, payload)
+                log(f"[metrics] backfilled AD/IC/Com/ADCC/ADD  img={rec['id']}")
         return payload
 
     log(f"[train] {who}  steps={cfg.steps}")

@@ -22,9 +22,18 @@ ensure_pkg_path()
 
 from cli import add_common_args, lambdas_from_args, resolve_run
 from classifiers import load_classifier
-from config import BUDGETS, FIDELITY_TAUS, KNAPSACK_BUDGETS, figure_dir
+from config import (
+    AREA_SWEEP,
+    BUDGETS,
+    DEFAULT_LAMBDAS,
+    FIDELITY_TAUS,
+    KNAPSACK_BUDGETS,
+    MASK_THRESH,
+    MASK_THRESH_SWEEP,
+    figure_dir,
+)
 from data import load_tensor, one_image_per_class, qualitative_image_ids
-from io_utils import ensure_dir, load_json, mean_std, rows_to_excel, save_json
+from io_utils import ensure_dir, load_json, mean_std, rows_to_excel, save_json, write_csv
 from metrics import ef1_new_version, evaluate_explanation, fidelity_kl_component, min_sufficient_budget
 from runner import load_masks, maybe_train_and_eval, run_dir
 from baselines import topk_binarize
@@ -39,6 +48,7 @@ from viz import (
     panel_mask,
     panel_original,
     step_progression_grid,
+    shaded_ef1_vs_p,
     triple_panel,
 )
 
@@ -517,6 +527,248 @@ def _figures_knapsack_mask_grids(args, eval_set, subset, rows, budgets, device) 
     log(f"[figures] mask grids: {n_saved} ({len(grid_backbones)} backbones × images) -> figures_*/mask_grids/")
 
 
+def _default_area() -> float:
+    return float(DEFAULT_LAMBDAS.get("area", 100.0))
+
+
+def _section0_dir_for(args, backbone: str, image_id: str) -> Path:
+    src = getattr(args, "section0_source", "section0")
+    d = _section0_run_dir(args.out, src, backbone, image_id)
+    if (d / "masks.pt").exists():
+        return d
+    for alt in ("section0", "section0_new_score"):
+        d = _section0_run_dir(args.out, alt, backbone, image_id)
+        if (d / "masks.pt").exists():
+            return d
+    return d
+
+
+def _train_area_run(bundle, rec, eval_root, args, backbone, lam: float, device):
+    """Train (or reuse Section 0) at a given λ_area. Works for unet / tiny_unet / none."""
+    cfg_name = f"area_{lam:g}"
+    out_dir = run_dir(args.out, "section2", backbone, cfg_name, rec["id"])
+    reuse = abs(lam - _default_area()) < 1e-6
+    s0 = _section0_dir_for(args, backbone, rec["id"]) if reuse else None
+    if reuse and s0 is not None and (s0 / "masks.pt").exists() and (out_dir / "masks.pt").exists() is False:
+        import shutil
+
+        ensure_dir(out_dir)
+        for name in ("masks.pt", "metrics.json", "train_meta.json"):
+            if (s0 / name).exists():
+                shutil.copy2(s0 / name, out_dir / name)
+        log(f"[sensitivity] reused Section 0 for λ_area={lam:g}  img={rec['id']}")
+    lam_map = lambdas_from_args(args)
+    lam_map["area"] = float(lam)
+    cfg = TrainConfig(
+        lambdas=lam_map,
+        steps=args.steps,
+        seed=image_seed(rec["id"], backbone, args.seed),
+        log_every=args.log_every,
+        no_ce=args.no_ce,
+        record_ef1=True,
+        keep_best_ef1=True,
+        mask_model=getattr(args, "mask_model", None),
+        mask_thresh=MASK_THRESH,
+    )
+    row = maybe_train_and_eval(
+        bundle,
+        rec,
+        eval_root,
+        out_dir,
+        cfg,
+        skip_existing=args.skip_existing,
+        device=device,
+        extra_metrics={"protocol": "lambda_area_sweep", "lambda_area": lam, "config": cfg_name},
+    )
+    return out_dir, row
+
+
+def run_sensitivity(args) -> None:
+    """λ_area and mask_thresh sweeps: EF1 vs p_area, star at the trained operating point."""
+    eval_set, images, device = resolve_run(args)
+    eval_root = Path(eval_set["root"])
+    area_vals = tuple(args.area_sweep) if getattr(args, "area_sweep", None) else AREA_SWEEP
+    thresh_vals = tuple(args.thresh_sweep) if getattr(args, "thresh_sweep", None) else MASK_THRESH_SWEEP
+    budgets = tuple(args.knapsack_budgets) if args.knapsack_budgets else KNAPSACK_BUDGETS
+    if args.quick:
+        area_vals = area_vals[:3]
+        thresh_vals = thresh_vals[:3]
+        budgets = (0.05, 0.10, 0.20, 0.50)
+        images = images[: min(4, len(images))]
+    rows = []
+    log(
+        f"Section 2 sensitivity  λ_area={list(area_vals)}  thresh={list(thresh_vals)}  "
+        f"images={len(images)}  mask_model={getattr(args, 'mask_model', None)}"
+    )
+    for backbone in args.backbones:
+        bundle = load_classifier(backbone, device)
+        fig_dir = ensure_dir(_figure_dir(args.out, backbone) / "sensitivity")
+        for rec in images:
+            area_series = {}
+            area_stars = {}
+            default_prob = None
+            x = load_tensor(rec, bundle.preprocess, device, root=eval_root)
+            for lam in area_vals:
+                out_dir, row = _train_area_run(bundle, rec, eval_root, args, backbone, lam, device)
+                _, mask_prob = load_masks(out_dir, device)
+                if abs(lam - _default_area()) < 1e-6:
+                    default_prob = mask_prob
+                knapsack = [_eval_knapsack_point(bundle, x, mask_prob, p, device) for p in budgets]
+                lab = f"λ_area={lam:g}"
+                area_series[lab] = ([k["p_budget"] for k in knapsack], [k["ef1"] for k in knapsack])
+                area_stars[lab] = (float(row.get("p_actual", 0.0)), float(row.get("ef1", 0.0)))
+                for pt in knapsack:
+                    rows.append(
+                        {
+                            "image_id": rec["id"],
+                            "class_name": rec["class_name"],
+                            "backbone": backbone,
+                            "sweep": "lambda_area",
+                            "lambda_area": lam,
+                            "mask_thresh": MASK_THRESH,
+                            **pt,
+                            "p_model": row.get("p_actual"),
+                            "ef1_model": row.get("ef1"),
+                        }
+                    )
+            shaded_ef1_vs_p(
+                fig_dir / f"ef1_vs_p_lambda_area_{rec['id']}.png",
+                area_series,
+                stars=area_stars,
+                title=f"EF1 vs p_area — λ_area sweep  {rec['class_name']} ({rec['id']}, {backbone})",
+            )
+
+            if default_prob is None:
+                default_prob = mask_prob
+            knapsack = [_eval_knapsack_point(bundle, x, default_prob, p, device) for p in budgets]
+            thresh_series = {
+                "top-k ranking": ([k["p_budget"] for k in knapsack], [k["ef1"] for k in knapsack])
+            }
+            thresh_stars = {}
+            t_ps, t_ef = [], []
+            for t in thresh_vals:
+                hard = (default_prob > float(t)).float()
+                if hard.dim() == 2:
+                    hard = hard.view(1, 1, *hard.shape)
+                met = evaluate_explanation(bundle, x, hard.to(device), mask_prob=default_prob)
+                lab = f"t={t:g}"
+                thresh_stars[lab] = (met["p_actual"], met["ef1"])
+                t_ps.append(met["p_actual"])
+                t_ef.append(met["ef1"])
+                rows.append(
+                    {
+                        "image_id": rec["id"],
+                        "class_name": rec["class_name"],
+                        "backbone": backbone,
+                        "sweep": "mask_thresh",
+                        "lambda_area": _default_area(),
+                        "mask_thresh": t,
+                        "p_budget": met["p_actual"],
+                        "ef1": met["ef1"],
+                        "p_actual": met["p_actual"],
+                        "conf_e": met["conf_e"],
+                        "top1_agreement": met["top1_agreement"],
+                    }
+                )
+            order = sorted(range(len(t_ps)), key=lambda i: t_ps[i])
+            thresh_series["mask thresh"] = ([t_ps[i] for i in order], [t_ef[i] for i in order])
+            for t in thresh_vals:
+                lab = f"t={t:g}"
+                px, py = thresh_stars[lab]
+                thresh_series[lab] = ([px], [py])
+            shaded_ef1_vs_p(
+                fig_dir / f"ef1_vs_p_mask_thresh_{rec['id']}.png",
+                thresh_series,
+                stars=thresh_stars,
+                title=f"EF1 vs p_area — mask_thresh sweep  {rec['class_name']} ({rec['id']}, {backbone})",
+                base_rgb=(0.55, 0.28, 0.22),
+            )
+
+        _sensitivity_sweep_plots(args, rows, backbone, area_vals, thresh_vals, budgets)
+
+    section = args.out / "section2"
+    save_json(section / "sensitivity_runs.json", rows)
+    write_csv(section / "sensitivity_runs.csv", rows)
+    log(f"Sensitivity JSON/CSV -> {section / 'sensitivity_runs.csv'}")
+
+
+def _sensitivity_sweep_plots(args, rows, backbone, area_vals, thresh_vals, budgets) -> None:
+    fig_dir = ensure_dir(_figure_dir(args.out, backbone) / "sensitivity")
+    sub = [r for r in rows if r["backbone"] == backbone]
+    area_series, area_stars = {}, {}
+    for lam in area_vals:
+        lab = f"λ_area={lam:g}"
+        xs, ys = [], []
+        for p in budgets:
+            vals = [
+                r["ef1"]
+                for r in sub
+                if r.get("sweep") == "lambda_area"
+                and abs(r.get("lambda_area", -1) - lam) < 1e-9
+                and abs(r.get("p_budget", -1) - p) < 1e-9
+            ]
+            if vals:
+                xs.append(p)
+                ys.append(float(sum(vals) / len(vals)))
+        if xs:
+            area_series[lab] = (xs, ys)
+        model_p, model_e = [], []
+        for r in sub:
+            if r.get("sweep") == "lambda_area" and abs(r.get("lambda_area", -1) - lam) < 1e-9:
+                if r.get("p_model") is not None and r.get("ef1_model") is not None:
+                    model_p.append(float(r["p_model"]))
+                    model_e.append(float(r["ef1_model"]))
+        if model_p:
+            area_stars[lab] = (sum(model_p) / len(model_p), sum(model_e) / len(model_e))
+    if area_series:
+        shaded_ef1_vs_p(
+            fig_dir / "ef1_vs_p_lambda_area_mean.png",
+            area_series,
+            stars=area_stars,
+            title=f"EF1 vs p_area — λ_area sweep mean ({backbone})",
+        )
+
+    thresh_series, thresh_stars = {}, {}
+    t_ps, t_ef = [], []
+    for t in thresh_vals:
+        lab = f"t={t:g}"
+        vals_p, vals_e = [], []
+        for r in sub:
+            if r.get("sweep") == "mask_thresh" and abs(float(r.get("mask_thresh", -1)) - t) < 1e-9:
+                vals_p.append(float(r["p_actual"]))
+                vals_e.append(float(r["ef1"]))
+        if vals_p:
+            px, py = sum(vals_p) / len(vals_p), sum(vals_e) / len(vals_e)
+            thresh_stars[lab] = (px, py)
+            t_ps.append(px)
+            t_ef.append(py)
+            thresh_series[lab] = ([px], [py])
+    if t_ps:
+        order = sorted(range(len(t_ps)), key=lambda i: t_ps[i])
+        thresh_series["mask thresh"] = ([t_ps[i] for i in order], [t_ef[i] for i in order])
+        shaded_ef1_vs_p(
+            fig_dir / "ef1_vs_p_mask_thresh_mean.png",
+            thresh_series,
+            stars=thresh_stars,
+            title=f"EF1 vs p_area — mask_thresh sweep mean ({backbone})",
+            base_rgb=(0.55, 0.28, 0.22),
+        )
+
+
+def run_sensitivity_figures_only(args) -> None:
+    js = args.out / "section2" / "sensitivity_runs.json"
+    if not js.exists():
+        log("No section2/sensitivity_runs.json — run --sensitivity first.")
+        return
+    rows = load_json(js)
+    area_vals = sorted({float(r["lambda_area"]) for r in rows if r.get("sweep") == "lambda_area"})
+    thresh_vals = sorted({float(r["mask_thresh"]) for r in rows if r.get("sweep") == "mask_thresh"})
+    budgets = sorted({float(r["p_budget"]) for r in rows if r.get("sweep") == "lambda_area"})
+    for backbone in args.backbones or sorted({r["backbone"] for r in rows}):
+        _sensitivity_sweep_plots(args, rows, backbone, area_vals, thresh_vals, budgets)
+        log(f"[figures] sensitivity mean plots -> {_figure_dir(args.out, backbone) / 'sensitivity'}")
+
+
 def main(argv=None):
     p = add_common_args(argparse.ArgumentParser(description="Section 2: minimality"))
     p.add_argument("--constraint", choices=("project", "lagrangian"), default="project")
@@ -560,8 +812,32 @@ def main(argv=None):
         default=None,
         help="Mask budgets for knapsack sweep as fractions (default: 0.005…0.50).",
     )
+    p.add_argument(
+        "--sensitivity",
+        action="store_true",
+        help="Sweep λ_area and mask_thresh; plot EF1 vs p_area (stars = model p).",
+    )
+    p.add_argument(
+        "--area-sweep",
+        nargs="+",
+        type=float,
+        default=None,
+        help="λ_area values (default: config.AREA_SWEEP).",
+    )
+    p.add_argument(
+        "--thresh-sweep",
+        nargs="+",
+        type=float,
+        default=None,
+        help="mask_thresh values (default: config.MASK_THRESH_SWEEP).",
+    )
     args = p.parse_args(argv)
-    if args.from_section0_knapsack:
+    if args.sensitivity:
+        if args.figures_only:
+            run_sensitivity_figures_only(args)
+        else:
+            run_sensitivity(args)
+    elif args.from_section0_knapsack:
         if args.figures_only:
             run_section2_knapsack_figures_only(args)
         else:

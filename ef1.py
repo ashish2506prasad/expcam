@@ -26,7 +26,8 @@ from config import (
     figure_dir,
 )
 from data import load_pil, section0_image_records
-from io_utils import load_json, rows_to_excel, save_json
+from io_utils import export_metric_csvs, load_json, rows_to_excel, save_json
+from metrics import CAM_TABLE_KEYS
 from runner import export_spatial_pack, maybe_train_and_eval, run_dir
 from train import TrainConfig, image_seed, log
 from viz import plot_ef1_section0_figures, plot_section0_step_progression_grids
@@ -191,6 +192,9 @@ def run_section0(args) -> None:
 
     save_json(out_root / section / "ef1_runs.json", rows)
     rows_to_excel(out_root / section / "section0_results.xlsx", {"ef1": rows})
+    cam_keys = [k for k in CAM_TABLE_KEYS if k != "insertion_auc"]
+    export_metric_csvs(out_root / section, rows, "ddcam_metrics", cam_keys)
+    log(f"EXP-CAM faithfulness CSV -> {out_root / section / 'ddcam_metrics_summary.csv'}")
     save_json(
         Path(out_root) / "spatial_masks" / "manifest.json",
         {

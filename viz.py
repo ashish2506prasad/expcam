@@ -402,6 +402,60 @@ def fidelity_vs_budget(
     _save(fig, path)
 
 
+def _shade_colors(n: int, base=(0.23, 0.47, 0.66)):
+    """Same hue, light → dark (n shades)."""
+    n = max(1, int(n))
+    out = []
+    for i in range(n):
+        t = 0.0 if n == 1 else i / (n - 1)
+        lift = 0.62 * (1.0 - t)
+        out.append(tuple(min(1.0, c + (1.0 - c) * lift) for c in base))
+    return out
+
+
+def shaded_ef1_vs_p(
+    path: Path,
+    series: Dict[str, Tuple[Sequence[float], Sequence[float]]],
+    *,
+    stars: Optional[Dict[str, Tuple[float, float]]] = None,
+    title: str = "",
+    xlabel: str = "p_area (% pixels)",
+    ylabel: str = "EF1",
+    base_rgb=(0.23, 0.47, 0.66),
+) -> None:
+    """Several EF1 vs p curves in one hue (different shades) + star at model p."""
+    labels = list(series.keys())
+    colors = _shade_colors(len(labels), base_rgb)
+    fig, ax = plt.subplots(figsize=(7.2, 4.6))
+    for color, lab in zip(colors, labels):
+        xs, ys = series[lab]
+        ax.plot(
+            np.asarray(xs, dtype=float) * 100.0,
+            np.asarray(ys, dtype=float),
+            lw=1.7,
+            color=color,
+            label=str(lab),
+        )
+        if stars and lab in stars:
+            px, py = stars[lab]
+            ax.scatter(
+                [100.0 * float(px)],
+                [float(py)],
+                s=64,
+                marker="*",
+                color=color,
+                zorder=5,
+                edgecolors="white",
+                linewidths=0.4,
+            )
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    ax.set_title(title)
+    ax.legend(fontsize=8, loc="best")
+    fig.tight_layout()
+    _save(fig, path)
+
+
 def metric_vs_budget(
     path: Path,
     p_fractions: Sequence[float],

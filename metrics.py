@@ -140,6 +140,63 @@ def fidelity_kl_component(row: Dict) -> float:
     return float(row.get("one_minus_normalized_kl", 0.0))
 
 
+CAM_FAITHFULNESS_KEYS = ("ad", "ic", "com", "coh", "adcc", "add")
+CAM_TABLE_KEYS = (
+    "ad",
+    "ic",
+    "com",
+    "coh",
+    "adcc",
+    "add",
+    "ef1",
+    "ef1_conf",
+    "top1_agreement",
+    "p_actual",
+    "conf_e",
+    "conf_x",
+    "kl_divergence",
+    "insertion_auc",
+)
+
+
+def cam_faithfulness(
+    conf_x: float,
+    conf_e: float,
+    conf_del: float,
+    complexity: float,
+) -> Dict[str, float]:
+    """DD-CAM / CAM-literature faithfulness on one image.
+
+    AD  = max(0, Yc(x)−Yc(e)) / Yc(x)     (average drop; ↓)
+    IC  = 1[Yc(e) > Yc(x)]                 (increase in confidence; ↑)
+    Com = ||m||₁ / N                       (complexity / area; ↓)
+    Coh = 1 − |Yc(x)−Yc(e)| / Yc(x)        (coherency; ↑)
+    ADCC = harmonic mean of (1−AD, Coh, 1−Com)  (↑)
+    ADD = max(0, Yc(x)−Yc(x⊙(1−m))) / Yc(x)  (drop under deletion; ↑)
+    """
+    eps = 1e-12
+    cx = float(conf_x)
+    ce = float(conf_e)
+    cd = float(conf_del)
+    com = float(max(0.0, min(1.0, complexity)))
+    ad = max(0.0, cx - ce) / (cx + eps)
+    ic = 1.0 if ce > cx else 0.0
+    coh = max(0.0, 1.0 - abs(cx - ce) / (cx + eps))
+    add = max(0.0, cx - cd) / (cx + eps)
+    ad_p = max(1.0 - ad, eps)
+    com_p = max(1.0 - com, eps)
+    coh_c = max(coh, eps)
+    adcc = 3.0 / (1.0 / ad_p + 1.0 / coh_c + 1.0 / com_p)
+    return {
+        "ad": float(ad),
+        "ic": float(ic),
+        "com": float(com),
+        "coh": float(coh),
+        "adcc": float(adcc),
+        "add": float(add),
+    }
+
+
 def evaluate_explanation(
     bundle: ClassifierBundle,
     x: torch.Tensor,
@@ -159,12 +216,18 @@ def evaluate_explanation(
         e = m.expand_as(x) * x
     else:
         e = m * x
+    m1 = m
+    if m1.shape[1] == 1:
+        m1 = m1.expand_as(x)
+    e_del = (1.0 - m1) * x
     with torch.no_grad():
         logits_x = bundle.model(x)
         logits_e = bundle.model(e)
+        logits_del = bundle.model(e_del)
     y = logits_x.argmax(dim=1)
     px = F.softmax(logits_x, dim=1)
     pe = F.softmax(logits_e, dim=1)
+    pdel = F.softmax(logits_del, dim=1)
     out: Dict[str, float] = {
         "p_actual": mask_size(m),
         "p_actual_pct": 100.0 * mask_size(m),
@@ -186,7 +249,11 @@ def evaluate_explanation(
         out["robustness_accuracy"] = robustness_accuracy(bundle.model, x, m, backgrounds, y=y)
     out.update(fidelity_bundle(logits_x, logits_e))
     out["ef1"] = explanation_f1(out["confidence_delta"], out["p_actual"])
+    out["ef1_conf"] = ef1_new_version(out["conf_e"], out["p_actual"])
     out["abs_confidence_delta"] = abs(out["confidence_delta"])
+    conf_del = float(pdel[0, y[0]].item())
+    out["conf_del"] = conf_del
+    out.update(cam_faithfulness(out["conf_x"], out["conf_e"], conf_del, out["p_actual"]))
     return out
 
 

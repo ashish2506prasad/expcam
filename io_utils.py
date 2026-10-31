@@ -50,6 +50,31 @@ def append_jsonl(path: Path, row: Mapping[str, Any]) -> None:
         f.write(json.dumps(to_jsonable(row)) + "\n")
 
 
+def mean_std_table(
+    rows: Sequence[Mapping[str, Any]],
+    keys: Sequence[str],
+    group_key: str = "backbone",
+    extra_groups: Sequence[str] = (),
+) -> list:
+    """Mean±std of `keys` grouped by group_key (+ extra_groups)."""
+    groups: dict[tuple, list] = {}
+    for row in rows:
+        g = (str(row.get(group_key, "")),) + tuple(str(row.get(k, "")) for k in extra_groups)
+        groups.setdefault(g, []).append(row)
+    out = []
+    for g, sub in groups.items():
+        rec = {group_key: g[0]}
+        for name, val in zip(extra_groups, g[1:]):
+            rec[name] = val
+        rec["n"] = len(sub)
+        for key in keys:
+            stats = mean_std([float(r[key]) for r in sub if r.get(key) is not None])
+            rec[f"{key}_mean"] = stats["mean"]
+            rec[f"{key}_std"] = stats["std"]
+        out.append(rec)
+    return out
+
+
 def mean_std(values: Sequence[float]) -> dict:
     arr = np.asarray(list(values), dtype=np.float64)
     if arr.size == 0:
@@ -86,6 +111,55 @@ def rows_to_excel(path: Path, sheets: Mapping[str, Iterable[Mapping[str, Any]]])
             if df.empty:
                 df = pd.DataFrame({"_empty": []})
             df.to_excel(writer, sheet_name=name[:31], index=False)
+
+
+def export_metric_csvs(
+    out_dir: Path,
+    rows: Sequence[Mapping[str, Any]],
+    prefix: str,
+    keys: Sequence[str],
+    extra_groups: Sequence[str] = (),
+) -> None:
+    """per-image + mean±std summary CSVs for a metric table."""
+    out_dir = Path(out_dir)
+    id_keys = (
+        "image_id",
+        "class_name",
+        "wnid",
+        "backbone",
+        "method",
+        "mode",
+        "mask_model",
+    )
+    per = []
+    for r in rows:
+        rec = {k: r.get(k) for k in id_keys if k in r}
+        rec.update({k: r.get(k) for k in keys})
+        per.append(rec)
+    write_csv(out_dir / f"{prefix}_per_image.csv", per)
+    present = [k for k in extra_groups if any(k in r for r in rows)]
+    summary = mean_std_table(rows, keys, group_key="backbone", extra_groups=present)
+    write_csv(out_dir / f"{prefix}_summary.csv", summary)
+
+
+def write_csv(path: Path, rows: Iterable[Mapping[str, Any]]) -> Path:
+    """Always write a CSV (does not require pandas)."""
+    path = Path(path)
+    ensure_dir(path.parent)
+    rows = list(rows)
+    if not rows:
+        path.write_text("", encoding="utf-8")
+        return path
+    keys: list[str] = []
+    for row in rows:
+        for k in row.keys():
+            if k not in keys:
+                keys.append(str(k))
+    lines = [",".join(keys)]
+    for row in rows:
+        lines.append(",".join(_csv_cell(row.get(k)) for k in keys))
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return path
 
 
 def _csv_cell(v: Any) -> str:
