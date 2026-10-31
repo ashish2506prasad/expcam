@@ -51,8 +51,8 @@ def figure_dir(out_root: Path, section: str, backbone: str) -> Path:
     return Path(out_root) / section / sub
 
 # Per-image U-Net training (AM6 cell 15 / AM4–AM5 full-model cells)
-STEPS = 400
-SECTION1_STEPS = 400
+STEPS = 300
+SECTION1_STEPS = 300
 LR = 5e-5
 OPTIMIZER_NAME = "adam"
 TEMPERATURE = 2.0
@@ -69,9 +69,9 @@ DEFAULT_LAMBDAS = {
     "act": 10.0,
     "ce": 15.0,
     "kl": 5.0,
-    "area": 100.0,
+    "area": 70.0,
     "bin": 1.0,
-    "tv": 500.0,
+    "tv": 1500.0,
     "rob": 100.0,  # abductive / L_rob in the notebooks (lam_abd)
 }
 
