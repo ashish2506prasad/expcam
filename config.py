@@ -23,19 +23,20 @@ KAGGLE_RUNS = Path("/kaggle/working/expcam_spatial")
 KAGGLE_WORKING = Path("/kaggle/working")
 
 SEED = 0
-# None = every TRAINX_CLASSES folder with at least N_PER_CLASS images.
+# None = every class folder under --data-root (sorted synset / folder name).
 N_CLASSES = None
-N_PER_CLASS = 20
+N_PER_CLASS = 1
+IMG_PER_CLASS = 1
 QUALITATIVE_PER_CLASS = 2
-SECTION0_PER_CLASS = 20
+SECTION0_PER_CLASS = 1
 SECTION0_IMAGE_SLOTS = tuple(range(N_PER_CLASS))
-SECTION0_STEPS = 400
+SECTION0_STEPS = 1000
 SECTION0_EF1_SNAPSHOT_START = 0
 SECTION0_EF1_SNAPSHOT_EVERY = 40
-SECTION3_EXP_STEPS = 800  # EXP-CAM training in Section 3; best-EF1 checkpoint saved
+SECTION3_EXP_STEPS = 1000
 IMAGE_SIZE = 224
 
-DEFAULT_BACKBONES = ("resnet18", "efficientnet_b0", "vit_b_16")
+DEFAULT_BACKBONES = ("resnet18",)
 
 # Per-backbone figure output folders under section1/ … section5/.
 FIGURE_DIRS = {
@@ -51,28 +52,27 @@ def figure_dir(out_root: Path, section: str, backbone: str) -> Path:
     return Path(out_root) / section / sub
 
 # Per-image U-Net training (AM6 cell 15 / AM4–AM5 full-model cells)
-STEPS = 300
-SECTION1_STEPS = 300
-LR = 5e-5
+STEPS = 200
+SECTION1_STEPS = 200
+LR = 5e-3
 OPTIMIZER_NAME = "adam"
 TEMPERATURE = 2.0
 MASK_THRESH = 0.5
 ROB_K_BACKGROUNDS = 3
-# Section 2 sensitivity: EF1 vs p_area for each λ_area / mask threshold.
-# Include the defaults (DEFAULT_LAMBDAS["area"], MASK_THRESH) so the star lands on a line.
-AREA_SWEEP = (50.0, 70.0, 90.0, 120.0)
+# Section 2: λ_area sweep at default thresh; thresh sweep at default λ_area.
+AREA_SWEEP = (400.0, 700.0, 1000.0, 1500.0, 2000.0)
 MASK_THRESH_SWEEP = (0.30, 0.40, 0.50, 0.60, 0.70)
-# "unet" | "tiny_unet" | "tiny_csae" | "none" (direct HxW pixel mask).
 MASK_MODEL = "none"
 
+# Defaults from EXP-CAM/exp-cam-spatial-direct.py
 DEFAULT_LAMBDAS = {
     "act": 10.0,
-    "ce": 15.0,
-    "kl": 5.0,
-    "area": 70.0,
-    "bin": 1.0,
-    "tv": 1500.0,
-    "rob": 100.0,  # abductive / L_rob in the notebooks (lam_abd)
+    "ce": 20.0,
+    "kl": 30.0,
+    "area": 1000.0,
+    "bin": 40.0,
+    "tv": 3000.0,
+    "rob": 50.0,
 }
 
 LOSS_TERMS = ("act", "ce", "kl", "area", "bin", "tv", "rob")
@@ -228,9 +228,11 @@ def add_where_args(p):
     )
     p.add_argument(
         "--data-root",
+        "--data-path",
         type=Path,
         default=None,
-        help="Image folder with synset dirs (n01484850, …). Same layout as freq_expcam.",
+        dest="data_root",
+        help="Class-folder dataset root, or a single image file.",
     )
     p.add_argument(
         "--out",
@@ -239,10 +241,16 @@ def add_where_args(p):
         help="Run directory. Default: expcam_runs (local) or /kaggle/working/expcam_spatial (kaggle).",
     )
     p.add_argument(
-        "--eval-set",
-        type=Path,
+        "--img-per-class",
+        type=int,
+        default=IMG_PER_CLASS,
+        help="Images per class (sorted filenames). Default: 1.",
+    )
+    p.add_argument(
+        "--num-classes",
+        type=int,
         default=None,
-        help="Reuse an existing eval_set.json (pass the freq_expcam one so image ids match).",
+        help="Use the first N class folders (sorted names). Default: all.",
     )
     p.set_defaults(zip_out=None)
     p.add_argument(

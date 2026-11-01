@@ -49,12 +49,12 @@ def _image_dir(out_root: Path, backbone: str, image_id: str) -> Path:
 def _methods_for(args, bundle) -> list[str]:
     if args.quick:
         return ["gradcam++", "scorecam"]
-    names = list(BASELINE_NAMES)
-    if not bundle.cam_is_vit:
-        names = [n for n in names if n != "attention"]
+    names = list(getattr(args, "compare", None) or BASELINE_NAMES)
     if "ddcam" not in names:
         names.append("ddcam")
-    return names
+    if not bundle.cam_is_vit:
+        names = [n for n in names if n != "attention"]
+    return list(dict.fromkeys(names))
 
 
 def _section0_mask_dir(args, backbone: str, image_id: str) -> Path:
@@ -144,7 +144,6 @@ def _train_expcam(bundle, x, rec, exp_dir: Path, args) -> tuple:
         no_ce=args.no_ce,
         record_ef1=True,
         keep_best_ef1=True,
-        mask_model=getattr(args, "mask_model", None),
     )
     log(
         f"  [EXP-CAM train] steps={cfg.steps}  no_ce={cfg.no_ce}  "
@@ -193,7 +192,15 @@ def run_section3(args) -> None:
         bundle = load_classifier(backbone, device)
         methods = _methods_for(args, bundle)
 
+        have = []
         for rec in images:
+            s0 = _section0_mask_dir(args, backbone, rec["id"])
+            if (s0 / "masks.pt").exists():
+                have.append(rec)
+        log(f"  {backbone}: {len(have)}/{len(images)} images have Section 0 masks")
+        illustrate = bool(getattr(args, "image_illustration", False))
+
+        for rec in have:
             dest = _image_dir(out_root, backbone, rec["id"])
             marker = dest / "complete.json"
             if args.skip_existing and marker.exists():
@@ -217,7 +224,8 @@ def run_section3(args) -> None:
 
             m_exp, p_exp, exp_metrics, curve_e = loaded
             k = int(m_exp.sum().item())
-            _save_explanation(dest, "EXP-CAM", x, m_exp, heatmap=False)
+            if illustrate:
+                _save_explanation(dest, "EXP-CAM", x, m_exp, heatmap=False)
             rows.append(_metric_row(rec, backbone, "EXP-CAM", "size_matched", exp_metrics, {"no_ce": args.no_ce}))
             curves[("EXP-CAM", backbone)].append(curve_e)
 
@@ -234,7 +242,8 @@ def run_section3(args) -> None:
                 cam = cam.detach()
                 matched = topk_binarize(cam, k).view(1, 1, *cam.shape[-2:])
                 own = otsu_binarize(cam).view(1, 1, *cam.shape[-2:])
-                _save_explanation(dest, disp, x, cam, heatmap=True)
+                if illustrate:
+                    _save_explanation(dest, disp, x, cam, heatmap=True)
 
                 for mode, mask in (("size_matched", matched), ("own_threshold", own)):
                     met = evaluate_explanation(bundle, x, mask, mask_prob=cam.view(1, 1, *cam.shape))
@@ -266,7 +275,10 @@ def run_section3(args) -> None:
     cam_keys = [k for k in CAM_TABLE_KEYS if any(r.get(k) is not None for r in rows)]
     export_metric_csvs(out_root, rows, "comparison", cam_keys, extra_groups=("method", "mode"))
     log(f"Comparison CSV -> {out_root / 'comparison_summary.csv'}")
-    _figures(eval_set, images, args, rows, curves, device)
+    if getattr(args, "image_illustration", False):
+        _figures(eval_set, images, args, rows, curves, device)
+    else:
+        log("Skipping per-image CAM figures (--image-illustration not set)")
 
 
 def _normalize_grid_ids(raw_ids) -> list[str]:
@@ -556,7 +568,7 @@ def _figures_for_backbone(eval_set, images, args, rows, curves, device, backbone
 
 
 def _method_cols(bundle) -> list[str]:
-    cols = ["EXP-CAM", "DD-CAM", "gradcam++", "layercam", "scorecam", "eigencam"]
+    cols = ["EXP-CAM", "DD-CAM", "gradcam", "gradcam++", "layercam", "scorecam", "eigencam"]
     if bundle.cam_is_vit:
         cols.append("attention")
     cols.append("rise")
@@ -595,7 +607,7 @@ def main(argv=None):
         "--exp-steps",
         type=int,
         default=SECTION3_EXP_STEPS,
-        help="EXP-CAM U-Net steps; best EF1 checkpoint is saved (default: 800).",
+        help="EXP-CAM PixelMask steps when --train-expcam is set (default: 1000).",
     )
     p.add_argument(
         "--figures-only",
@@ -627,6 +639,11 @@ def main(argv=None):
         "--train-expcam",
         action="store_true",
         help="Retrain EXP-CAM here instead of reusing Section 0 masks.",
+    )
+    p.add_argument(
+        "--image-illustration",
+        action="store_true",
+        help="Save per-image CAM figures. If omitted, only metric CSVs are written.",
     )
     args = p.parse_args(argv)
     if args.comparisons_only:

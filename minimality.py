@@ -34,9 +34,16 @@ from config import (
 )
 from data import load_tensor, one_image_per_class, qualitative_image_ids
 from io_utils import ensure_dir, load_json, mean_std, rows_to_excel, save_json, write_csv
-from metrics import ef1_new_version, evaluate_explanation, fidelity_kl_component, min_sufficient_budget
+from metrics import (
+    ef1_new_version,
+    evaluate_explanation,
+    fidelity_kl_component,
+    match_abs_delta_topk,
+    min_sufficient_budget,
+)
 from runner import load_masks, maybe_train_and_eval, run_dir
-from baselines import topk_binarize
+from baselines import BASELINE_NAMES, compute_heatmap, topk_binarize
+from dd_cam import ddcam_heatmap
 from train import TrainConfig, image_seed, log
 from viz import (
     boxplot,
@@ -103,7 +110,6 @@ def run_section2(args) -> None:
                     p_target=p,
                     log_every=args.log_every,
                     no_ce=args.no_ce,
-                    mask_model=getattr(args, "mask_model", None),
                 )
                 row = maybe_train_and_eval(
                     bundle,
@@ -531,32 +537,10 @@ def _default_area() -> float:
     return float(DEFAULT_LAMBDAS.get("area", 100.0))
 
 
-def _section0_dir_for(args, backbone: str, image_id: str) -> Path:
-    src = getattr(args, "section0_source", "section0")
-    d = _section0_run_dir(args.out, src, backbone, image_id)
-    if (d / "masks.pt").exists():
-        return d
-    for alt in ("section0", "section0_new_score"):
-        d = _section0_run_dir(args.out, alt, backbone, image_id)
-        if (d / "masks.pt").exists():
-            return d
-    return d
-
-
 def _train_area_run(bundle, rec, eval_root, args, backbone, lam: float, device):
-    """Train (or reuse Section 0) at a given λ_area. Works for unet / tiny_unet / none."""
+    """Train a direct PixelMask at a given λ_area (default thresh)."""
     cfg_name = f"area_{lam:g}"
     out_dir = run_dir(args.out, "section2", backbone, cfg_name, rec["id"])
-    reuse = abs(lam - _default_area()) < 1e-6
-    s0 = _section0_dir_for(args, backbone, rec["id"]) if reuse else None
-    if reuse and s0 is not None and (s0 / "masks.pt").exists() and (out_dir / "masks.pt").exists() is False:
-        import shutil
-
-        ensure_dir(out_dir)
-        for name in ("masks.pt", "metrics.json", "train_meta.json"):
-            if (s0 / name).exists():
-                shutil.copy2(s0 / name, out_dir / name)
-        log(f"[sensitivity] reused Section 0 for λ_area={lam:g}  img={rec['id']}")
     lam_map = lambdas_from_args(args)
     lam_map["area"] = float(lam)
     cfg = TrainConfig(
@@ -567,7 +551,6 @@ def _train_area_run(bundle, rec, eval_root, args, backbone, lam: float, device):
         no_ce=args.no_ce,
         record_ef1=True,
         keep_best_ef1=True,
-        mask_model=getattr(args, "mask_model", None),
         mask_thresh=MASK_THRESH,
     )
     row = maybe_train_and_eval(
@@ -596,10 +579,13 @@ def run_sensitivity(args) -> None:
         budgets = (0.05, 0.10, 0.20, 0.50)
         images = images[: min(4, len(images))]
     rows = []
+    compare = list(getattr(args, "compare", None) or BASELINE_NAMES) + ["ddcam"]
+    compare = list(dict.fromkeys(compare))
     log(
         f"Section 2 sensitivity  λ_area={list(area_vals)}  thresh={list(thresh_vals)}  "
-        f"images={len(images)}  mask_model={getattr(args, 'mask_model', None)}"
+        f"images={len(images)}  compare={compare}"
     )
+    cmp_rows = []
     for backbone in args.backbones:
         bundle = load_classifier(backbone, device)
         fig_dir = ensure_dir(_figure_dir(args.out, backbone) / "sensitivity")
@@ -684,11 +670,119 @@ def run_sensitivity(args) -> None:
                 base_rgb=(0.55, 0.28, 0.22),
             )
 
+            default_dir = run_dir(args.out, "section2", backbone, f"area_{_default_area():g}", rec["id"])
+            if not (default_dir / "metrics.json").exists():
+                continue
+            dmet = load_json(default_dir / "metrics.json")
+            target_abs = abs(float(dmet.get("confidence_delta", dmet.get("abs_confidence_delta", 0.0))))
+            p_exp = float(dmet.get("p_actual", 0.0))
+            cmp_rows.append(
+                {
+                    "image_id": rec["id"],
+                    "class_name": rec["class_name"],
+                    "backbone": backbone,
+                    "method": "expcam_default",
+                    "p_area": p_exp,
+                    "abs_delta_conf": target_abs,
+                    "more_area_than_expcam": 0,
+                }
+            )
+            for lam in area_vals:
+                if abs(lam - _default_area()) < 1e-6:
+                    continue
+                adir = run_dir(args.out, "section2", backbone, f"area_{lam:g}", rec["id"])
+                if not (adir / "metrics.json").exists():
+                    continue
+                am = load_json(adir / "metrics.json")
+                pa = float(am.get("p_actual", 0.0))
+                cmp_rows.append(
+                    {
+                        "image_id": rec["id"],
+                        "class_name": rec["class_name"],
+                        "backbone": backbone,
+                        "method": f"expcam_area_{lam:g}",
+                        "p_area": pa,
+                        "abs_delta_conf": abs(float(am.get("confidence_delta", 0.0))),
+                        "more_area_than_expcam": int(pa > p_exp),
+                    }
+                )
+            for t in thresh_vals:
+                lab = f"t={t:g}"
+                if lab not in thresh_stars:
+                    continue
+                pa, _ef = thresh_stars[lab]
+                cmp_rows.append(
+                    {
+                        "image_id": rec["id"],
+                        "class_name": rec["class_name"],
+                        "backbone": backbone,
+                        "method": f"expcam_thresh_{t:g}",
+                        "p_area": float(pa),
+                        "abs_delta_conf": None,
+                        "more_area_than_expcam": int(float(pa) > p_exp),
+                    }
+                )
+            for name in compare:
+                if name == "attention" and not bundle.cam_is_vit:
+                    continue
+                try:
+                    cam = ddcam_heatmap(bundle, x) if name == "ddcam" else compute_heatmap(name, bundle, x)
+                except Exception as exc:
+                    log(f"  [skip] {name}: {exc}")
+                    continue
+                if cam is None:
+                    continue
+                matched = match_abs_delta_topk(bundle, x, cam, target_abs)
+                pa = float(matched["p_actual"])
+                cmp_rows.append(
+                    {
+                        "image_id": rec["id"],
+                        "class_name": rec["class_name"],
+                        "backbone": backbone,
+                        "method": name,
+                        "p_area": pa,
+                        "abs_delta_conf": float(matched["abs_delta"]),
+                        "more_area_than_expcam": int(pa > p_exp + 1e-9),
+                        "k_pixels": matched.get("k_pixels"),
+                    }
+                )
+
         _sensitivity_sweep_plots(args, rows, backbone, area_vals, thresh_vals, budgets)
 
-    section = args.out / "section2"
+    section = ensure_dir(args.out / "section2")
     save_json(section / "sensitivity_runs.json", rows)
     write_csv(section / "sensitivity_runs.csv", rows)
+    if cmp_rows:
+        save_json(section / "minimality_match.json", cmp_rows)
+        write_csv(section / "minimality_match_per_image.csv", cmp_rows)
+        summary = []
+        methods = []
+        for r in cmp_rows:
+            if r["method"] not in methods:
+                methods.append(r["method"])
+        for backbone in args.backbones:
+            for m in methods:
+                sub = [r for r in cmp_rows if r["backbone"] == backbone and r["method"] == m]
+                if not sub:
+                    continue
+                n = len(sub)
+                more = sum(int(r["more_area_than_expcam"]) for r in sub)
+                pa = [float(r["p_area"]) for r in sub]
+                summary.append(
+                    {
+                        "backbone": backbone,
+                        "method": m,
+                        "n": n,
+                        "mean_p_area": float(sum(pa) / n),
+                        "pct_more_area_than_expcam": 100.0 * more / n,
+                    }
+                )
+        write_csv(section / "minimality_comparison_summary.csv", summary)
+        rows_to_excel(
+            section / "minimality_comparison.xlsx",
+            {"per_image": cmp_rows, "summary": summary},
+        )
+        log(f"Minimality comparison -> {section / 'minimality_comparison.xlsx'}")
     log(f"Sensitivity JSON/CSV -> {section / 'sensitivity_runs.csv'}")
 
 

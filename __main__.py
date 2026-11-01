@@ -1,8 +1,7 @@
-"""python -m expcam <section|eval-set|all> [args...]
+"""python -m expcam <section|all> [args...]
 
 Also works as a script on Kaggle:
-    python __main__.py 1 --where kaggle
-    python ablation.py --where kaggle
+    python __main__.py 0 --where kaggle
 """
 
 from __future__ import annotations
@@ -16,28 +15,27 @@ except ImportError:
 
 ensure_pkg_path()
 
-USAGE = """EXP-CAM experiments
+USAGE = """EXP-CAM (spatial-direct PixelMask)
 
-Pixel Section 0 (spatial masks) on the same dataset as freq_expcam:
+Images: first --img-per-class files per class (sorted names), first --num-classes
+folders (sorted). No eval_set.json. --data-path / --data-root may be a folder or
+a single image file. --steps is shared.
 
-  python __main__.py eval-set --where kaggle --data-root /kaggle/input/<slug>/trainX1_subset \\
-      --eval-set /kaggle/working/freq_expcam_fft/eval_set.json --out /kaggle/working/expcam_spatial
+  python __main__.py 0 --where kaggle --data-root /kaggle/input/<slug>/trainX1_subset \\
+      --out /kaggle/working/expcam_spatial --backbones vit_b_16 --img-per-class 1
 
-  python __main__.py 0 --subset --where kaggle \\
-      --data-root /kaggle/input/<slug>/trainX1_subset \\
-      --eval-set /kaggle/working/freq_expcam_fft/eval_set.json \\
-      --out /kaggle/working/expcam_spatial \\
-      --backbones resnet18 vit_b_16
+  python __main__.py 2 --sensitivity --where kaggle --data-root /kaggle/input/<slug>/trainX1_subset \\
+      --out /kaggle/working/expcam_spatial --backbones vit_b_16
 
-  python __main__.py 0 --subset --lam-area 80 --lam-rob 50 --where kaggle \\
-      --data-root /kaggle/input/<slug>/trainX1_subset \\
-      --out /kaggle/working/expcam_spatial --backbones resnet18 vit_b_16
+  python __main__.py 3 --where kaggle --data-root /kaggle/input/<slug>/trainX1_subset \\
+      --out /kaggle/working/expcam_spatial --backbones vit_b_16
 
-Download /kaggle/working/expcam_spatial.zip
-Masks: expcam_spatial/spatial_masks/resnet18/{id}_{class}/masks.pt
-       expcam_spatial/spatial_masks/vit_b_16/{id}_{class}/masks.pt
+Section 2 --sensitivity retrains PixelMask; it does not need Section 0.
+Section 3 uses only images that already have Section 0 masks.pt.
+Pass --image-illustration on Section 3 to write CAM figures; otherwise CSVs only.
 
-If you omit --eval-set, a new eval_set.json is built (ids will not match freq runs).
+Defaults match EXP-CAM/exp-cam-spatial-direct.py (λ_area=1000, lr=5e-3, 1000 steps).
+On Kaggle, --out is zipped when the run finishes.
 """
 
 
@@ -68,10 +66,7 @@ def main(argv=None):
         data_main(rest)
         return
     if cmd == "all":
-        from data import main as data_main
-
-        data_main(rest)
-        for key in ("1", "2", "3"):
+        for key in ("0", "2", "3"):
             modname = _SECTION_MODS[key]
             print(f"\n===== Section {key} =====")
             getattr(_load(modname), "main")(rest)

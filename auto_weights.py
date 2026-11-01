@@ -56,7 +56,6 @@ def run_section5(args) -> None:
                     auto_balance="uncertainty",
                     log_every=args.log_every,
                     no_ce=args.no_ce,
-                    mask_model=getattr(args, "mask_model", None),
                     record_curve=(
                         rec["id"] == eval_set["curve_image_id"]
                         and abs(p - 0.10) < 1e-9

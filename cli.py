@@ -14,8 +14,8 @@ ensure_pkg_path()
 
 import torch
 
-from config import DEFAULT_BACKBONES, MASK_MODEL, SEED, STEPS, add_where_args
-from data import load_eval_set
+from config import DEFAULT_BACKBONES, IMG_PER_CLASS, SEED, STEPS, add_where_args
+from data import select_records
 
 _CUDA_OK = None
 _CUDA_NOTE = ""
@@ -82,7 +82,7 @@ def add_common_args(p: argparse.ArgumentParser) -> argparse.ArgumentParser:
     )
     p.add_argument("--seed", type=int, default=SEED)
     p.add_argument("--steps", type=int, default=STEPS)
-    p.add_argument("--n-images", type=int, default=None, help="Subset of the cached eval set (still stratified order).")
+    p.add_argument("--n-images", type=int, default=None, help="Cap on the selected image list.")
     p.add_argument("--backbones", nargs="+", default=list(DEFAULT_BACKBONES))
     p.add_argument("--skip-existing", action="store_true", default=True)
     p.add_argument("--no-skip-existing", action="store_false", dest="skip_existing")
@@ -91,23 +91,20 @@ def add_common_args(p: argparse.ArgumentParser) -> argparse.ArgumentParser:
         "--log-every",
         type=int,
         default=50,
-        help="Print loss every N U-Net steps (0 = silent). Notebooks used 10.",
+        help="Print loss every N steps (0 = silent).",
     )
     p.add_argument(
         "--no-ce",
         action="store_true",
-        help="Omit cross-entropy (CE) loss from U-Net training (all backbones).",
-    )
-    p.add_argument(
-        "--mask-model",
-        choices=("unet", "tiny_unet", "tiny_csae", "none"),
-        default=None,
-        help=(
-            "Mask generator: unet, tiny_unet, tiny_csae, or none (direct HxW pixel mask). "
-            f"Default: {MASK_MODEL} from config.py."
-        ),
+        help="Omit cross-entropy (CE) from the training objective.",
     )
     add_loss_lambda_args(p)
+    p.add_argument(
+        "--compare",
+        nargs="+",
+        default=None,
+        help="CAM methods to compare (default: all names in baselines.py plus ddcam).",
+    )
     return p
 
 
@@ -148,18 +145,18 @@ def resolve_run(args: argparse.Namespace):
     if args.quick:
         args.steps = min(args.steps, 40)
         args.backbones = ["resnet18"]
-        args.n_images = args.n_images or 7
-    eval_path = getattr(args, "eval_set", None)
-    eval_set = load_eval_set(eval_path) if eval_path is not None else load_eval_set()
-    if eval_path is not None:
-        from shutil import copy2
-
-        dest = Path(args.out) / "eval_set.json"
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        src = Path(eval_path).resolve()
-        if src.exists() and src != dest.resolve():
-            copy2(src, dest)
-    images = _stratified_subset(eval_set["images"], args.n_images)
+        args.img_per_class = 1
+        args.num_classes = args.num_classes or 2
+    n_img = getattr(args, "img_per_class", None)
+    if n_img is None:
+        n_img = getattr(args, "section0_per_class", None) or IMG_PER_CLASS
+    n_cls = getattr(args, "num_classes", None)
+    eval_set = select_records(C.TRAINX_DIR, img_per_class=int(n_img), num_classes=n_cls)
+    images = list(eval_set["images"])
+    if getattr(args, "n_images", None):
+        images = images[: int(args.n_images)]
+        eval_set["images"] = images
+        eval_set["n_images"] = len(images)
     device = device_from_flag(args.device)
     return eval_set, images, device
 

@@ -18,6 +18,7 @@ from PIL import Image
 
 from config import (
     DEFAULT_BACKBONES,
+    IMG_PER_CLASS,
     N_CLASSES,
     N_PER_CLASS,
     QUALITATIVE_PER_CLASS,
@@ -29,7 +30,94 @@ from config import (
 from io_utils import load_json, save_json
 
 
-IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".JPEG", ".JPG", ".PNG", ".bmp"}
+IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".JPEG", ".JPG", ".PNG", ".bmp", ".webp"}
+
+
+def is_image_file(path: Path) -> bool:
+    return Path(path).is_file() and Path(path).suffix in IMAGE_EXTS
+
+
+def discover_class_folders(root: Path) -> List[str]:
+    """Class subfolders that contain at least one image, sorted by folder name."""
+    root = Path(root)
+    names = []
+    if not root.is_dir():
+        return names
+    for p in sorted(root.iterdir(), key=lambda x: x.name):
+        if p.is_dir() and list_class_images(root, p.name):
+            names.append(p.name)
+    return names
+
+
+def _class_meta(wnid: str) -> Dict:
+    meta = TRAINX_CLASSES.get(wnid)
+    if meta:
+        return {"class_name": meta["name"], "imagenet_idx": meta["imagenet_idx"]}
+    return {"class_name": wnid, "imagenet_idx": -1}
+
+
+def select_records(
+    root: Path,
+    img_per_class: int = IMG_PER_CLASS,
+    num_classes: Optional[int] = None,
+) -> Dict:
+    """Build an in-memory image list. Does not write eval_set.json.
+
+    Folder: first ``num_classes`` synset dirs (sorted), first ``img_per_class``
+    files in each (sorted names). File: a single-image run.
+    """
+    root = Path(root)
+    images: List[Dict] = []
+    if is_image_file(root):
+        rec = {
+            "id": "000",
+            "relpath": root.name,
+            "abspath": str(root.resolve()),
+            "wnid": root.parent.name,
+            "class_name": _class_meta(root.parent.name)["class_name"],
+            "imagenet_idx": _class_meta(root.parent.name)["imagenet_idx"],
+            "class_slot": 0,
+            "filename": root.name,
+        }
+        images.append(rec)
+        data_root = root.parent
+        classes = [rec["wnid"]]
+    else:
+        data_root = root
+        classes = discover_class_folders(root)
+        if num_classes is not None:
+            classes = classes[: max(0, int(num_classes))]
+        n_img = max(1, int(img_per_class))
+        for class_i, wnid in enumerate(classes):
+            files = list_class_images(root, wnid)[:n_img]
+            meta = _class_meta(wnid)
+            for p in files:
+                images.append(
+                    {
+                        "id": f"{len(images):03d}",
+                        "relpath": str(p.relative_to(root)).replace("\\", "/"),
+                        "wnid": wnid,
+                        "class_name": meta["class_name"],
+                        "imagenet_idx": meta["imagenet_idx"],
+                        "class_slot": class_i,
+                        "filename": p.name,
+                    }
+                )
+    print(
+        f"[data] {len(images)} images, {len(classes)} classes from {data_root} "
+        f"(img-per-class={img_per_class}, num-classes={num_classes or 'all'})",
+        flush=True,
+    )
+    return {
+        "root": str(data_root),
+        "n_per_class": int(img_per_class),
+        "n_images": len(images),
+        "n_classes": len(classes),
+        "classes": classes,
+        "images": images,
+        "curve_image_id": images[0]["id"] if images else None,
+        "cached": False,
+    }
 
 
 def eligible_trainx_classes(root: Path, n_per_class: int) -> List[str]:
@@ -153,6 +241,8 @@ def load_eval_set(path: Optional[Path] = None) -> Dict:
 def image_path(record: Dict, root: Optional[Path] = None) -> Path:
     import config as C
 
+    if record.get("abspath"):
+        return Path(record["abspath"])
     root = Path(root) if root is not None else C.TRAINX_DIR
     return root / record["relpath"]
 
@@ -236,12 +326,9 @@ def same_class_records(eval_set: Dict, rec: Dict) -> List[Dict]:
 
 
 def parse_eval_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="Build the cached EXP-CAM eval set from trainx/")
+    p = argparse.ArgumentParser(description="List images that would be used (no eval_set.json).")
     add_where_args(p)
     p.add_argument("--root", type=Path, default=None, help="Alias for --data-root")
-    p.add_argument("--n-per-class", type=int, default=N_PER_CLASS)
-    p.add_argument("--seed", type=int, default=SEED)
-    p.add_argument("--force", action="store_true")
     return p.parse_args(argv)
 
 
@@ -251,7 +338,12 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     args = parse_eval_args(argv)
     data_root = args.data_root or args.root
     C.apply_where(args.where, data_root=data_root, runs_dir=args.out, zip_out=False)
-    build_eval_set(root=C.TRAINX_DIR, n_per_class=args.n_per_class, seed=args.seed, force=args.force)
+    recs = select_records(
+        C.TRAINX_DIR,
+        img_per_class=int(getattr(args, "img_per_class", None) or IMG_PER_CLASS),
+        num_classes=getattr(args, "num_classes", None),
+    )
+    print(f"[data] listed {recs['n_images']} images; nothing written to disk", flush=True)
 
 
 if __name__ == "__main__":

@@ -22,17 +22,13 @@ from classifiers import load_classifier
 from config import (
     SECTION0_PER_CLASS,
     SECTION0_STEPS,
-    ef1_snapshot_steps,
     figure_dir,
 )
-from data import load_pil, section0_image_records
 from io_utils import export_metric_csvs, load_json, rows_to_excel, save_json
 from metrics import CAM_TABLE_KEYS
-from runner import export_spatial_pack, maybe_train_and_eval, run_dir
+from runner import maybe_train_and_eval, run_dir
 from train import TrainConfig, image_seed, log
-from viz import plot_ef1_section0_figures, plot_section0_step_progression_grids
-
-DEFAULT_STEP_GRID_EVERY = (40,)
+from viz import plot_ef1_section0_figures
 
 
 def _section_name(args) -> str:
@@ -117,31 +113,22 @@ def _apply_subset_args(args) -> None:
         args.section0_slots = [0]
     elif getattr(args, "subset", False):
         args.section0_per_class = 2
-        args.section0_slots = [0, 1]
+        args.img_per_class = 2
 
 
 def run_section0(args) -> None:
-    eval_set, _images, device = resolve_run(args)
+    eval_set, subset, device = resolve_run(args)
     out_root = args.out
     section = _section_name(args)
     steps = args.steps
-    _apply_subset_args(args)
-    subset = section0_image_records(
-        eval_set,
-        per_class=args.section0_per_class,
-        slots=None if getattr(args, "section0_slots", None) is None else tuple(args.section0_slots),
-    )
-    snap_steps = tuple(args.snapshot_steps) if args.snapshot_steps else ef1_snapshot_steps(max_step=steps)
     rows = []
     ef1_version = "new" if args.ef1_new_version else "legacy"
     eval_root = Path(eval_set["root"])
     lambdas = lambdas_from_args(args)
 
     log(
-        f"Section 0  device={device}  subset={len(subset)} images "
-        f"({args.section0_per_class}/class)  steps={steps}  section={section}  "
-        f"ef1_version={ef1_version}  lambdas={lambdas}  "
-        f"snapshots={snap_steps[0]}…{snap_steps[-1] if snap_steps else '—'}"
+        f"Section 0  device={device}  images={len(subset)}  steps={steps}  "
+        f"section={section}  lambdas={lambdas}"
     )
 
     for backbone in args.backbones:
@@ -149,7 +136,6 @@ def run_section0(args) -> None:
         bundle = load_classifier(backbone, device)
         for rec in subset:
             out_dir = run_dir(out_root, section, backbone, "ef1_full", rec["id"])
-            expl_dir = out_dir / "snapshots"
             cfg = TrainConfig(
                 lambdas=dict(lambdas),
                 steps=steps,
@@ -159,9 +145,6 @@ def run_section0(args) -> None:
                 record_ef1=True,
                 keep_best_ef1=True,
                 ef1_version=ef1_version,
-                save_expl_steps=snap_steps,
-                save_expl_dir=str(expl_dir),
-                mask_model=getattr(args, "mask_model", None),
             )
             row = maybe_train_and_eval(
                 bundle,
@@ -183,30 +166,15 @@ def run_section0(args) -> None:
                 row["ef1_max"] = max(p["ef1"] for p in curve)
                 row["ef1_mean"] = sum(p["ef1"] for p in curve) / len(curve)
             rows.append(row)
-            export_spatial_pack(Path(out_root) / "spatial_masks", backbone, rec, out_dir)
 
         _plot_ef1_for_backbone(out_root, section, backbone, subset, args.ef1_threshold)
-        _plot_step_grids_for_backbone(
-            out_root, section, backbone, subset, tuple(args.step_grid_every), eval_root
-        )
 
     save_json(out_root / section / "ef1_runs.json", rows)
     rows_to_excel(out_root / section / "section0_results.xlsx", {"ef1": rows})
     cam_keys = [k for k in CAM_TABLE_KEYS if k != "insertion_auc"]
     export_metric_csvs(out_root / section, rows, "ddcam_metrics", cam_keys)
     log(f"EXP-CAM faithfulness CSV -> {out_root / section / 'ddcam_metrics_summary.csv'}")
-    save_json(
-        Path(out_root) / "spatial_masks" / "manifest.json",
-        {
-            "n_images": len(subset),
-            "backbones": list(args.backbones),
-            "section": section,
-            "ids": [r["id"] for r in subset],
-            "note": "Per-backbone folders hold masks.pt + x/mask/e PNGs for freq_expcam overlay.",
-        },
-    )
     log(f"Section 0 complete under {out_root / section}")
-    log(f"Spatial packs -> {Path(out_root) / 'spatial_masks' / '{resnet18,vit_b_16}'}")
 
 
 def _threshold_stats(series, tau: float) -> dict:
@@ -222,29 +190,16 @@ def _threshold_stats(series, tau: float) -> dict:
 
 
 def run_section0_figures_only(args) -> None:
-    eval_set, _, _device = resolve_run(args)
+    eval_set, subset, _device = resolve_run(args)
     out_root = args.out
     section = _section_name(args)
-    _apply_subset_args(args)
-    subset = section0_image_records(
-        eval_set,
-        per_class=args.section0_per_class,
-        slots=None if getattr(args, "section0_slots", None) is None else tuple(args.section0_slots),
-    )
-    grid_every = tuple(args.step_grid_every)
-    eval_root = Path(eval_set["root"])
-    if not getattr(args, "step_grids_only", False):
-        js = out_root / section / "ef1_runs.json"
-        if not js.exists():
-            log(f"No {section}/ef1_runs.json — run Section 0 first.")
-            return
-        load_json(js)
+    js = out_root / section / "ef1_runs.json"
+    if not js.exists():
+        log(f"No {section}/ef1_runs.json — run Section 0 first.")
+        return
+    load_json(js)
     for backbone in args.backbones:
-        if not getattr(args, "step_grids_only", False):
-            _plot_ef1_for_backbone(out_root, section, backbone, subset, args.ef1_threshold)
-        _plot_step_grids_for_backbone(
-            out_root, section, backbone, subset, grid_every, eval_root
-        )
+        _plot_ef1_for_backbone(out_root, section, backbone, subset, args.ef1_threshold)
 
 
 def main(argv=None):
@@ -262,50 +217,23 @@ def main(argv=None):
         help="Optional horizontal line on EF1 plot to inspect a quality threshold.",
     )
     p.add_argument(
-        "--snapshot-steps",
-        type=int,
-        nargs="*",
-        default=None,
-        help="Override snapshot steps (default: every 40 from step 40).",
-    )
-    p.add_argument(
         "--subset",
         action="store_true",
-        help="2 images per class (eval-set slots 0 and 1). Match freq_expcam --subset.",
+        help="Use 2 images per class (overrides --img-per-class).",
     )
     p.add_argument(
         "--section0-per-class",
         type=int,
         default=SECTION0_PER_CLASS,
-        help="Images per class for Section 0 (default: all eval-set images per class). Overridden by --subset.",
-    )
-    p.add_argument(
-        "--section0-slots",
-        type=int,
-        nargs="+",
-        default=None,
-        help="Eval-set slot indices per class. Default: 0 … --section0-per-class-1.",
+        help="Images per class for Section 0. Overridden by --subset.",
     )
     p.add_argument(
         "--figures-only",
         action="store_true",
-        help="Regenerate EF1 plots and/or step grids from saved runs.",
-    )
-    p.add_argument(
-        "--step-grids-only",
-        action="store_true",
-        help="With --figures-only: only write step progression grids (skip EF1 curves).",
-    )
-    p.add_argument(
-        "--step-grid-every",
-        type=int,
-        nargs="+",
-        default=list(DEFAULT_STEP_GRID_EVERY),
-        help="Sampling interval for step progression grids (default: 40).",
+        help="Regenerate EF1 plots from saved runs.",
     )
     args = p.parse_args(argv)
-    if args.step_grids_only:
-        args.figures_only = True
+    _apply_subset_args(args)
     if args.figures_only:
         run_section0_figures_only(args)
     else:

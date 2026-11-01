@@ -15,7 +15,6 @@ except ImportError:
 ensure_pkg_path()
 
 from classifiers import ClassifierBundle
-from config import MASK_MODEL
 from data import load_tensor
 from io_utils import load_json, save_json
 from metrics import CAM_FAITHFULNESS_KEYS, evaluate_explanation
@@ -115,19 +114,8 @@ def maybe_train_and_eval(
             "optimizer": "Adam",
             "lr": cfg.lr,
             "per_image": True,
-            "architecture": {
-                "none": "PixelMask",
-                "pixel": "PixelMask",
-                "direct": "PixelMask",
-                "unet": "UNetCSAE",
-                "unet_csae": "UNetCSAE",
-                "tiny_unet": "TinyUnetCSAE",
-                "tinyunet": "TinyUnetCSAE",
-                "tiny_unet_csae": "TinyUnetCSAE",
-                "tiny_csae": "TinyCSAE",
-                "tinycsae": "TinyCSAE",
-            }.get(str(cfg.mask_model or MASK_MODEL).strip().lower(), "UNetCSAE"),
-            "mask_model": str(cfg.mask_model or MASK_MODEL),
+            "architecture": "PixelMask",
+            "mask_model": "none",
         },
     )
     return payload

@@ -257,6 +257,43 @@ def evaluate_explanation(
     return out
 
 
+def match_abs_delta_topk(
+    bundle: ClassifierBundle,
+    x: torch.Tensor,
+    scores: torch.Tensor,
+    target_abs_delta: float,
+) -> Dict[str, float]:
+    """Smallest top-k on `scores` whose |Δconf| is ≤ target (EXP-CAM |Δconf|)."""
+    from baselines import topk_binarize
+
+    h, w = int(x.shape[-2]), int(x.shape[-1])
+    n = h * w
+    scores = scores.detach().float().reshape(h, w)
+    target = float(abs(target_abs_delta))
+
+    def eval_k(k: int) -> Dict[str, float]:
+        k = int(max(1, min(n, k)))
+        hard = topk_binarize(scores, k).view(1, 1, h, w)
+        met = evaluate_explanation(bundle, x, hard.to(x.device), mask_prob=scores.view(1, 1, h, w))
+        met["k_pixels"] = k
+        met["abs_delta"] = abs(float(met["confidence_delta"]))
+        return met
+
+    lo, hi = 1, n
+    best = eval_k(n)
+    while lo < hi:
+        mid = (lo + hi) // 2
+        met = eval_k(mid)
+        if met["abs_delta"] <= target + 1e-4:
+            best = met
+            hi = mid
+        else:
+            lo = mid + 1
+    if lo != best.get("k_pixels"):
+        best = eval_k(lo)
+    return best
+
+
 def min_sufficient_budget(
     rows_by_p: Sequence[Dict],
     tau: float,

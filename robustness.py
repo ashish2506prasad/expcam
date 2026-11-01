@@ -142,7 +142,6 @@ def run_section4(args) -> None:
                     seed=image_seed(rec["id"], backbone, args.seed) + (1 if tag == "geometric" else 2),
                     log_every=args.log_every,
                     no_ce=args.no_ce,
-                    mask_model=getattr(args, "mask_model", None),
                 )
                 rec_k = dict(rec)
                 # train against the perturbed tensor by a tiny local wrapper: write temp via maybe_train? 

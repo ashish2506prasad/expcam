@@ -181,10 +181,12 @@ def rise(
     return cam / (cam.max() + 1e-12)
 
 
-BASELINE_NAMES = ("gradcam++", "layercam", "scorecam", "eigencam", "attention", "rise")
+BASELINE_NAMES = ("gradcam", "gradcam++", "layercam", "scorecam", "eigencam", "attention", "rise")
 
 
 def compute_heatmap(name: str, bundle: ClassifierBundle, x: torch.Tensor, rise_masks: int = 800) -> Optional[torch.Tensor]:
+    if name == "gradcam":
+        return grad_cam(bundle, x)
     if name == "gradcam++":
         return grad_cam_pp(bundle, x)
     if name == "layercam":

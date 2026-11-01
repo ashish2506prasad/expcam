@@ -1,5 +1,5 @@
-"""Per-image U-Net training. Architecture, optimizer, steps, and seed are held
-fixed across ablations unless a section explicitly changes the loss weights
+"""Per-image PixelMask training (spatial-direct). Optimizer, steps, and seed
+are held fixed across ablations unless a section changes the loss weights
 or adds a mask-budget constraint.
 """
 
@@ -20,7 +20,7 @@ except ImportError:
 ensure_pkg_path()
 
 from classifiers import ClassifierBundle, run_with_acts
-from config import DEFAULT_LAMBDAS, LR, MASK_MODEL, MASK_THRESH, ROB_K_BACKGROUNDS, SEED, STEPS, TEMPERATURE
+from config import DEFAULT_LAMBDAS, LR, MASK_THRESH, ROB_K_BACKGROUNDS, SEED, STEPS, TEMPERATURE
 from metrics import confidence_delta, ef1_new_version, explanation_f1
 from losses import (
     abductive_loss,
@@ -35,7 +35,7 @@ from losses import (
     sample_gaussian_backgrounds,
     tv8_loss,
 )
-from models import PixelMask, TinyCSAE, TinyUnetCSAE, UNetCSAE
+from models import PixelMask
 
 
 def log(msg: str) -> None:
@@ -82,7 +82,6 @@ class TrainConfig:
     ef1_version: str = "legacy"  # "legacy" | "new" (ef1_new_version in metrics.py)
     save_expl_steps: Optional[Sequence[int]] = None
     save_expl_dir: Optional[str] = None
-    mask_model: Optional[str] = None  # None → config.MASK_MODEL ("unet" | "none")
 
 
 @dataclass
@@ -110,23 +109,8 @@ def train_mask(
 ) -> TrainResult:
     device = x.device
     seed_all(cfg.seed)
-    model_name = str(cfg.mask_model or MASK_MODEL).strip().lower()
-    if model_name in ("none", "pixel", "direct"):
-        mask_net = PixelMask(int(x.shape[-2]), int(x.shape[-1])).to(device)
-        arch = "PixelMask"
-    elif model_name in ("unet", "unet_csae"):
-        mask_net = UNetCSAE().to(device)
-        arch = "UNetCSAE"
-    elif model_name in ("tiny_unet", "tinyunet", "tiny_unet_csae"):
-        mask_net = TinyUnetCSAE().to(device)
-        arch = "TinyUnetCSAE"
-    elif model_name in ("tiny_csae", "tinycsae"):
-        mask_net = TinyCSAE().to(device)
-        arch = "TinyCSAE"
-    else:
-        raise ValueError(
-            f"Unknown mask_model={model_name!r}; expected 'unet', 'tiny_unet', 'tiny_csae', or 'none'"
-        )
+    mask_net = PixelMask(int(x.shape[-2]), int(x.shape[-1])).to(device)
+    arch = "PixelMask"
     mask_net.train()
     opt = torch.optim.Adam(mask_net.parameters(), lr=cfg.lr)
 
