@@ -54,17 +54,16 @@ def figure_dir(out_root: Path, section: str, backbone: str) -> Path:
 # Per-image U-Net training (AM6 cell 15 / AM4–AM5 full-model cells)
 STEPS = 200
 SECTION1_STEPS = 200
-LR = 5e-3
+LR = 5e-4
 OPTIMIZER_NAME = "adam"
 TEMPERATURE = 2.0
 MASK_THRESH = 0.5
 ROB_K_BACKGROUNDS = 3
 # Section 2: λ_area sweep at default thresh; thresh sweep at default λ_area.
-AREA_SWEEP = (400.0, 700.0, 1000.0, 1500.0, 2000.0)
-MASK_THRESH_SWEEP = (0.30, 0.40, 0.50, 0.60, 0.70)
+AREA_SWEEP = (700.0, 1000.0, 1500.0)
+MASK_THRESH_SWEEP = (0.40, 0.50, 0.60)
 MASK_MODEL = "none"
 
-# Defaults from EXP-CAM/exp-cam-spatial-direct.py
 DEFAULT_LAMBDAS = {
     "act": 10.0,
     "ce": 20.0,
