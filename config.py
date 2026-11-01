@@ -240,7 +240,7 @@ def add_where_args(p):
         help="Run directory. Default: expcam_runs (local) or /kaggle/working/expcam_spatial (kaggle).",
     )
     p.add_argument(
-        "--img-per-class",
+        "--img-per-cls",
         type=int,
         default=IMG_PER_CLASS,
         help="Images per class (sorted filenames). Default: 1.",
