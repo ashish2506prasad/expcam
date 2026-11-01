@@ -18,7 +18,7 @@ ensure_pkg_path()
 
 from cli import add_common_args, lambdas_from_args, resolve_run
 from classifiers import load_classifier
-from config import SECTION1_STEPS, SEQUENTIAL_PLOT_ORDER, figure_dir, sequential_configs
+from config import SEQUENTIAL_PLOT_ORDER, figure_dir, sequential_configs
 from data import load_tensor, qualitative_image_ids
 from io_utils import load_json, rows_to_excel, save_json
 from metrics import ef1_new_version
@@ -252,7 +252,6 @@ def _fig_qualitative_seq(eval_set, args, device, fig_dir, backbone, qids) -> Non
 
 def main(argv=None):
     p = add_common_args(argparse.ArgumentParser(description="Section 1: sequential loss ablation"))
-    p.set_defaults(steps=SECTION1_STEPS)
     p.add_argument("--figures-only", action="store_true")
     p.add_argument(
         "--seq-qualitative-ids",

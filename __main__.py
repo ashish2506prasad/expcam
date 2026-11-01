@@ -34,7 +34,7 @@ Section 2 --sensitivity retrains PixelMask; it does not need Section 0.
 Section 3 uses only images that already have Section 0 masks.pt.
 Pass --image-illustration on Section 3 to write CAM figures; otherwise CSVs only.
 
-Defaults match EXP-CAM/exp-cam-spatial-direct.py (λ_area=1000, lr=5e-3, 1000 steps).
+Training length is config.STEPS for every section (override with --steps).
 On Kaggle, --out is zipped when the run finishes.
 """
 

@@ -30,10 +30,8 @@ IMG_PER_CLASS = 1
 QUALITATIVE_PER_CLASS = 2
 SECTION0_PER_CLASS = 1
 SECTION0_IMAGE_SLOTS = tuple(range(N_PER_CLASS))
-SECTION0_STEPS = 1000
 SECTION0_EF1_SNAPSHOT_START = 0
 SECTION0_EF1_SNAPSHOT_EVERY = 40
-SECTION3_EXP_STEPS = 1000
 IMAGE_SIZE = 224
 
 DEFAULT_BACKBONES = ("resnet18",)
@@ -51,9 +49,8 @@ def figure_dir(out_root: Path, section: str, backbone: str) -> Path:
     sub = FIGURE_DIRS.get(backbone, f"figures_{backbone}")
     return Path(out_root) / section / sub
 
-# Per-image U-Net training (AM6 cell 15 / AM4–AM5 full-model cells)
+# Shared PixelMask training length for every section (override with --steps).
 STEPS = 200
-SECTION1_STEPS = 200
 LR = 5e-4
 OPTIMIZER_NAME = "adam"
 TEMPERATURE = 2.0
@@ -121,7 +118,7 @@ TRAINX_CLASSES = {
 def ef1_snapshot_steps(
     start: int = SECTION0_EF1_SNAPSHOT_START,
     every: int = SECTION0_EF1_SNAPSHOT_EVERY,
-    max_step: int = SECTION0_STEPS,
+    max_step: int = STEPS,
 ) -> tuple[int, ...]:
     """Steps at which to save explanation snapshots (40, 80, …, max_step)."""
     return tuple(range(start + every, max_step + 1, every))
@@ -129,7 +126,7 @@ def ef1_snapshot_steps(
 
 def ef1_grid_steps(
     every: int,
-    max_step: int = SECTION0_STEPS,
+    max_step: int = STEPS,
     first: int | None = None,
 ) -> tuple[int, ...]:
     """Steps for Section 0 progression grids (40, 80, …, max_step)."""
@@ -240,9 +237,11 @@ def add_where_args(p):
         help="Run directory. Default: expcam_runs (local) or /kaggle/working/expcam_spatial (kaggle).",
     )
     p.add_argument(
+        "--img-per-class",
         "--img-per-cls",
         type=int,
         default=IMG_PER_CLASS,
+        dest="img_per_class",
         help="Images per class (sorted filenames). Default: 1.",
     )
     p.add_argument(

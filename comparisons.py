@@ -23,7 +23,7 @@ ensure_pkg_path()
 from baselines import BASELINE_NAMES, compute_heatmap, otsu_binarize, topk_binarize
 from cli import add_common_args, lambdas_from_args, resolve_run
 from classifiers import load_classifier
-from config import N_RISE_MASKS, SECTION3_EXP_STEPS, figure_dir
+from config import N_RISE_MASKS, figure_dir
 from data import load_tensor
 from dd_cam import ddcam_heatmap
 from io_utils import ensure_dir, export_metric_csvs, load_json, mean_std, rows_to_excel, save_json
@@ -606,8 +606,8 @@ def main(argv=None):
     p.add_argument(
         "--exp-steps",
         type=int,
-        default=SECTION3_EXP_STEPS,
-        help="EXP-CAM PixelMask steps when --train-expcam is set (default: 1000).",
+        default=None,
+        help="Override --steps for EXP-CAM training in this section only.",
     )
     p.add_argument(
         "--figures-only",
@@ -646,6 +646,8 @@ def main(argv=None):
         help="Save per-image CAM figures. If omitted, only metric CSVs are written.",
     )
     args = p.parse_args(argv)
+    if args.exp_steps is None:
+        args.exp_steps = args.steps
     if args.comparisons_only:
         args.figures_only = True
     if args.heatmap_grid_only:

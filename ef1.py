@@ -1,8 +1,6 @@
-"""Section 0 — EF1 diagnostic training on a 2-image-per-class subset.
+"""Section 0 — EF1 diagnostic training.
 
-Trains the Full EXP-CAM model for SECTION0_STEPS (800) with CE loss disabled,
-records EF1 every step, saves x|m|e snapshots every 40 steps from step 40,
-and plots EF1 trajectories per backbone.
+Trains the Full EXP-CAM PixelMask for config.STEPS (override with --steps).
 """
 
 from __future__ import annotations
@@ -21,7 +19,6 @@ from cli import add_common_args, lambdas_from_args, resolve_run
 from classifiers import load_classifier
 from config import (
     SECTION0_PER_CLASS,
-    SECTION0_STEPS,
     figure_dir,
 )
 from io_utils import export_metric_csvs, load_json, rows_to_excel, save_json
@@ -204,7 +201,6 @@ def run_section0_figures_only(args) -> None:
 
 def main(argv=None):
     p = add_common_args(argparse.ArgumentParser(description="Section 0: EF1 diagnostic training"))
-    p.set_defaults(steps=SECTION0_STEPS)
     p.add_argument(
         "--ef1-new-version",
         action="store_true",
