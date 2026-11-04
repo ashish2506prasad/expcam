@@ -14,7 +14,7 @@ ensure_pkg_path()
 
 import torch
 
-from config import DEFAULT_BACKBONES, IMG_PER_CLASS, SEED, STEPS, add_where_args
+from config import BATCH_SIZE, DEFAULT_BACKBONES, IMG_PER_CLASS, SEED, STEPS, add_where_args
 from data import select_records
 
 _CUDA_OK = None
@@ -82,6 +82,12 @@ def add_common_args(p: argparse.ArgumentParser) -> argparse.ArgumentParser:
     )
     p.add_argument("--seed", type=int, default=SEED)
     p.add_argument("--steps", type=int, default=STEPS)
+    p.add_argument(
+        "--batch-size",
+        type=int,
+        default=BATCH_SIZE,
+        help="Images per classifier forward. Each image still has its own mask and Adam state.",
+    )
     p.add_argument("--n-images", type=int, default=None, help="Cap on the selected image list.")
     p.add_argument("--backbones", nargs="+", default=list(DEFAULT_BACKBONES))
     p.add_argument("--skip-existing", action="store_true", default=True)
@@ -149,9 +155,16 @@ def resolve_run(args: argparse.Namespace):
         args.num_classes = args.num_classes or 2
     n_img = getattr(args, "img_per_class", None)
     if n_img is None:
-        n_img = getattr(args, "section0_per_class", None) or IMG_PER_CLASS
+        n_img = IMG_PER_CLASS
     n_cls = getattr(args, "num_classes", None)
-    eval_set = select_records(C.TRAINX_DIR, img_per_class=int(n_img), num_classes=n_cls)
+    sample = "random" if C.WHERE == "kaggle" else "first"
+    eval_set = select_records(
+        C.TRAINX_DIR,
+        img_per_class=int(n_img),
+        num_classes=n_cls,
+        sample=sample,
+        seed=int(getattr(args, "seed", 0) or 0),
+    )
     images = list(eval_set["images"])
     if getattr(args, "n_images", None):
         images = images[: int(args.n_images)]

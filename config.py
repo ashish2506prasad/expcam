@@ -23,24 +23,24 @@ KAGGLE_RUNS = Path("/kaggle/working/expcam_spatial")
 KAGGLE_WORKING = Path("/kaggle/working")
 
 SEED = 0
-# None = every class folder under --data-root (sorted synset / folder name).
-N_CLASSES = None
-N_PER_CLASS = 1
-IMG_PER_CLASS = 1
-QUALITATIVE_PER_CLASS = 2
-SECTION0_PER_CLASS = 1
-SECTION0_IMAGE_SLOTS = tuple(range(N_PER_CLASS))
+# --img-per-cls default. --num-classes default is all folders (argparse None).
+IMG_PER_CLASS = 2
 SECTION0_EF1_SNAPSHOT_START = 0
 SECTION0_EF1_SNAPSHOT_EVERY = 40
-IMAGE_SIZE = 224
 
 DEFAULT_BACKBONES = ("resnet18",)
 
 # Per-backbone figure output folders under section1/ … section5/.
 FIGURE_DIRS = {
     "resnet18": "figures_resnet",
+    "resnet50": "figures_resnet50",
+    "vgg11": "figures_vgg11",
+    "vgg16": "figures_vgg16",
+    "vgg19": "figures_vgg19",
     "efficientnet_b0": "figures_efficient",
+    "inception_v3": "figures_inception",
     "vit_b_16": "figures_vit",
+    "vit_l_16": "figures_vit_l",
 }
 
 
@@ -50,7 +50,8 @@ def figure_dir(out_root: Path, section: str, backbone: str) -> Path:
     return Path(out_root) / section / sub
 
 # Shared PixelMask training length for every section (override with --steps).
-STEPS = 200
+STEPS = 10
+BATCH_SIZE = 8
 LR = 5e-4
 OPTIMIZER_NAME = "adam"
 TEMPERATURE = 2.0
@@ -59,7 +60,6 @@ ROB_K_BACKGROUNDS = 3
 # Section 2: λ_area sweep at default thresh; thresh sweep at default λ_area.
 AREA_SWEEP = (700.0, 1000.0, 1500.0)
 MASK_THRESH_SWEEP = (0.40, 0.50, 0.60)
-MASK_MODEL = "none"
 
 DEFAULT_LAMBDAS = {
     "act": 10.0,
@@ -78,14 +78,6 @@ BUDGETS = (0.50, 0.30, 0.20, 0.10, 0.05, 0.02, 0.01, 0.005)
 KNAPSACK_BUDGETS = (0.005, 0.01, 0.02, 0.05, 0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40, 0.50)
 FIDELITY_TAUS = (0.95, 0.90, 1.0)
 P_TARGETS = (0.05, 0.10, 0.20)
-
-LAYER_WEIGHTS_RESNET = {
-    "relu": 1.0,
-    "layer1": 2.0,
-    "layer2": 2.0,
-    "layer3": 4.0,
-    "layer4": 8.0,
-}
 
 IMAGENET_MEAN = (0.485, 0.456, 0.406)
 IMAGENET_STD = (0.229, 0.224, 0.225)
@@ -242,7 +234,7 @@ def add_where_args(p):
         type=int,
         default=IMG_PER_CLASS,
         dest="img_per_class",
-        help="Images per class (sorted filenames). Default: 1.",
+        help="Images per class. Default: 2. Local: first N sorted files. Kaggle: random N with --seed.",
     )
     p.add_argument(
         "--num-classes",

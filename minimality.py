@@ -41,7 +41,7 @@ from metrics import (
     match_abs_delta_topk,
     min_sufficient_budget,
 )
-from runner import load_masks, maybe_train_and_eval, run_dir
+from runner import load_masks, maybe_train_and_eval, maybe_train_and_eval_many, run_dir
 from baselines import BASELINE_NAMES, compute_heatmap, topk_binarize
 from dd_cam import ddcam_heatmap
 from train import TrainConfig, image_seed, log
@@ -97,6 +97,7 @@ def run_section2(args) -> None:
         bundle = load_classifier(backbone, device)
         for p in budgets:
             log(f"--- budget p={p:g} / {backbone} ---")
+            jobs = []
             for rec in images:
                 cfg_name = f"budget_p{p:g}"
                 out_dir = run_dir(out_root, section, backbone, cfg_name, rec["id"])
@@ -111,21 +112,27 @@ def run_section2(args) -> None:
                     log_every=args.log_every,
                     no_ce=args.no_ce,
                 )
-                row = maybe_train_and_eval(
-                    bundle,
-                    rec,
-                    Path(eval_set["root"]),
-                    out_dir,
-                    cfg,
-                    skip_existing=args.skip_existing,
-                    device=device,
-                    extra_metrics={
-                        "protocol": "budget",
-                        "p_budget": p,
-                        "p_gap": None,
-                        "config": cfg_name,
-                    },
+                jobs.append(
+                    {
+                        "rec": rec,
+                        "eval_root": Path(eval_set["root"]),
+                        "out_dir": out_dir,
+                        "cfg": cfg,
+                        "skip_existing": args.skip_existing,
+                        "extra_metrics": {
+                            "protocol": "budget",
+                            "p_budget": p,
+                            "p_gap": None,
+                            "config": cfg_name,
+                        },
+                    }
                 )
+            trained = maybe_train_and_eval_many(
+                bundle, jobs, device, batch_size=getattr(args, "batch_size", 8)
+            )
+            for rec, row in zip(images, trained):
+                cfg_name = f"budget_p{p:g}"
+                out_dir = run_dir(out_root, section, backbone, cfg_name, rec["id"])
                 row["p_budget"] = p
                 row["p_gap"] = abs(p - row["p_actual"])
                 save_json(out_dir / "metrics.json", row)
@@ -537,8 +544,7 @@ def _default_area() -> float:
     return float(DEFAULT_LAMBDAS.get("area", 100.0))
 
 
-def _train_area_run(bundle, rec, eval_root, args, backbone, lam: float, device):
-    """Train a direct PixelMask at a given λ_area (default thresh)."""
+def _area_job(rec, eval_root, args, backbone, lam: float) -> dict:
     cfg_name = f"area_{lam:g}"
     out_dir = run_dir(args.out, "section2", backbone, cfg_name, rec["id"])
     lam_map = lambdas_from_args(args)
@@ -553,17 +559,30 @@ def _train_area_run(bundle, rec, eval_root, args, backbone, lam: float, device):
         keep_best_ef1=True,
         mask_thresh=MASK_THRESH,
     )
+    return {
+        "rec": rec,
+        "eval_root": eval_root,
+        "out_dir": out_dir,
+        "cfg": cfg,
+        "skip_existing": args.skip_existing,
+        "extra_metrics": {"protocol": "lambda_area_sweep", "lambda_area": lam, "config": cfg_name},
+    }
+
+
+def _train_area_run(bundle, rec, eval_root, args, backbone, lam: float, device):
+    """Load (or train) a PixelMask at a given λ_area."""
+    job = _area_job(rec, eval_root, args, backbone, lam)
     row = maybe_train_and_eval(
         bundle,
         rec,
         eval_root,
-        out_dir,
-        cfg,
+        job["out_dir"],
+        job["cfg"],
         skip_existing=args.skip_existing,
         device=device,
-        extra_metrics={"protocol": "lambda_area_sweep", "lambda_area": lam, "config": cfg_name},
+        extra_metrics=job["extra_metrics"],
     )
-    return out_dir, row
+    return job["out_dir"], row
 
 
 def run_sensitivity(args) -> None:
@@ -586,9 +605,17 @@ def run_sensitivity(args) -> None:
         f"images={len(images)}  compare={compare}"
     )
     cmp_rows = []
+    bs = getattr(args, "batch_size", 8)
     for backbone in args.backbones:
         bundle = load_classifier(backbone, device)
         fig_dir = ensure_dir(_figure_dir(args.out, backbone) / "sensitivity")
+        for lam in area_vals:
+            maybe_train_and_eval_many(
+                bundle,
+                [_area_job(rec, eval_root, args, backbone, lam) for rec in images],
+                device,
+                batch_size=bs,
+            )
         for rec in images:
             area_series = {}
             area_stars = {}

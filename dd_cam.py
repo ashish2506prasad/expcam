@@ -18,7 +18,7 @@ except ImportError:
 
 ensure_pkg_path()
 
-from classifiers import ClassifierBundle
+from classifiers import ClassifierBundle, as_logits
 from train import log
 
 
@@ -131,7 +131,7 @@ def _cnn_forward(bundle: ClassifierBundle, x: torch.Tensor, keep) -> tuple:
 
     h = bundle.cam_layer.register_forward_hook(hook)
     try:
-        logits = bundle.model(x)
+        logits = as_logits(bundle.model(x))
     finally:
         h.remove()
     return acts["a"], logits
@@ -158,7 +158,7 @@ def _vit_forward(bundle: ClassifierBundle, x: torch.Tensor, keep: Sequence[int])
     layer = bundle.model.encoder.layers[-1]
     h = layer.register_forward_pre_hook(pre_hook)
     try:
-        logits = bundle.model(x)
+        logits = as_logits(bundle.model(x))
     finally:
         h.remove()
     return acts.get("a"), logits

@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Dict, List, Optional, Sequence
 
 import torch
 import torch.nn as nn
@@ -21,7 +21,7 @@ ensure_pkg_path()
 
 from classifiers import ClassifierBundle, run_with_acts
 from config import DEFAULT_LAMBDAS, LR, MASK_THRESH, ROB_K_BACKGROUNDS, SEED, STEPS, TEMPERATURE
-from metrics import confidence_delta, ef1_new_version, explanation_f1
+from metrics import ef1_new_version, explanation_f1
 from losses import (
     abductive_loss,
     area_loss,
@@ -29,7 +29,6 @@ from losses import (
     ce_loss,
     hard_st,
     kl_loss,
-    lagrangian_area_penalty,
     layer_act_loss,
     project_topk_mask,
     sample_gaussian_backgrounds,
@@ -107,9 +106,23 @@ def train_mask(
     x: torch.Tensor,
     cfg: TrainConfig,
 ) -> TrainResult:
+    if x.dim() != 4 or x.shape[0] != 1:
+        raise ValueError("train_mask expects a single NCHW image; use train_mask_batch")
+    return train_mask_batch(bundle, x, cfg)[0]
+
+
+def train_mask_batch(
+    bundle: ClassifierBundle,
+    x: torch.Tensor,
+    cfg: TrainConfig,
+) -> List[TrainResult]:
+    """Independent PixelMask per image; classifier forwards are batched."""
+    if x.dim() != 4:
+        raise ValueError(f"expected NCHW tensor, got {tuple(x.shape)}")
     device = x.device
+    bsz = int(x.shape[0])
     seed_all(cfg.seed)
-    mask_net = PixelMask(int(x.shape[-2]), int(x.shape[-1])).to(device)
+    mask_net = PixelMask(int(x.shape[-2]), int(x.shape[-1]), batch_size=bsz).to(device)
     arch = "PixelMask"
     mask_net.train()
     opt = torch.optim.Adam(mask_net.parameters(), lr=cfg.lr)
@@ -127,21 +140,21 @@ def train_mask(
 
     acts_x, logits_x = run_with_acts(bundle, x, require_grad=False)
     shallow = set(list(bundle.tap_names)[:2])
-    mu = float(cfg.mu_init)
+    mu = x.new_full((bsz,), float(cfg.mu_init))
     curve: List[Dict[str, float]] = []
     wcurve: List[Dict[str, float]] = []
-    ef1_curve: List[Dict[str, float]] = []
+    ef1_curves: List[List[Dict[str, float]]] = [[] for _ in range(bsz)]
     save_expl_set = set(cfg.save_expl_steps or ())
     track_ef1 = cfg.record_ef1 or cfg.keep_best_ef1
-    best_ef1 = -1.0
-    best_ef1_step = 0
-    best_mask_prob: Optional[torch.Tensor] = None
-    best_mask_hard: Optional[torch.Tensor] = None
+    best_ef1 = [-1.0] * bsz
+    best_ef1_step = [0] * bsz
+    best_mask_prob: List[Optional[torch.Tensor]] = [None] * bsz
+    best_mask_hard: List[Optional[torch.Tensor]] = [None] * bsz
 
     t0 = time.perf_counter()
     if cfg.log_every:
         log(
-            f"  training {arch}  steps={cfg.steps}  lr={cfg.lr}  seed={cfg.seed}"
+            f"  training {arch}  batch={bsz}  steps={cfg.steps}  lr={cfg.lr}  seed={cfg.seed}"
             + (f"  constraint={cfg.constraint} p={cfg.p_target}" if cfg.constraint else "")
         )
     for t in range(1, cfg.steps + 1):
@@ -200,53 +213,59 @@ def train_mask(
                 loss_total = loss_total + cfg.lambdas.get(k, 0.0) * L
 
         if cfg.constraint == "lagrangian" and cfg.p_target is not None:
-            p_now = mask_prob.mean()
-            loss_total = loss_total + lagrangian_area_penalty(p_now, cfg.p_target, mu)
+            p_now = mask_prob.flatten(1).mean(dim=1)
+            loss_total = loss_total + (mu * torch.relu(p_now - float(cfg.p_target))).sum()
 
         loss_total.backward()
         opt.step()
 
         if cfg.constraint == "lagrangian" and cfg.p_target is not None:
             with torch.no_grad():
-                viol = float(torch.relu(mask_prob.mean() - cfg.p_target).item())
-            mu = max(0.0, mu + cfg.mu_eta * viol)
+                viol = torch.relu(mask_prob.flatten(1).mean(dim=1) - float(cfg.p_target))
+                mu = torch.clamp(mu + cfg.mu_eta * viol, min=0.0)
 
         if track_ef1 or save_expl_set:
             with torch.no_grad():
                 p_hard = (mask_prob > cfg.mask_thresh).float()
-                p_act = float(p_hard.mean().item())
-                d_conf = confidence_delta(logits_x, logits_e)
-                if cfg.ef1_version == "new":
-                    y = logits_x.argmax(dim=1)
-                    conf_e = float(
-                        torch.nn.functional.softmax(logits_e, dim=1)[0, y[0]].item()
+                p_act_b = p_hard.flatten(1).mean(dim=1)
+                y = logits_x.argmax(dim=1)
+                px = torch.nn.functional.softmax(logits_x, dim=1)
+                pe = torch.nn.functional.softmax(logits_e, dim=1)
+                d_conf_b = pe[range(bsz), y] - px[range(bsz), y]
+                last_ef1 = 0.0
+                for i in range(bsz):
+                    p_act = float(p_act_b[i].item())
+                    d_conf = float(d_conf_b[i].item())
+                    if cfg.ef1_version == "new":
+                        ef1 = ef1_new_version(float(pe[i, y[i]].item()), p_act)
+                    else:
+                        ef1 = explanation_f1(d_conf, p_act)
+                    last_ef1 = ef1
+                    if track_ef1:
+                        ef1_curves[i].append(
+                            {
+                                "step": t,
+                                "ef1": ef1,
+                                "delta_conf": d_conf,
+                                "p_actual": p_act,
+                            }
+                        )
+                    if cfg.keep_best_ef1 and ef1 >= best_ef1[i]:
+                        best_ef1[i] = ef1
+                        best_ef1_step[i] = t
+                        best_mask_prob[i] = mask_prob[i : i + 1].detach().clone()
+                        best_mask_hard[i] = p_hard[i : i + 1].detach().clone()
+                if t in save_expl_set and cfg.save_expl_dir and bsz == 1:
+                    _save_expl_snapshot(
+                        x, p_hard, cfg.save_expl_dir, t, last_ef1, float(p_act_b[0]), float(d_conf_b[0])
                     )
-                    ef1 = ef1_new_version(conf_e, p_act)
-                else:
-                    ef1 = explanation_f1(d_conf, p_act)
-                if track_ef1:
-                    ef1_curve.append(
-                        {
-                            "step": t,
-                            "ef1": ef1,
-                            "delta_conf": d_conf,
-                            "p_actual": p_act,
-                        }
-                    )
-                if cfg.keep_best_ef1 and ef1 >= best_ef1:
-                    best_ef1 = ef1
-                    best_ef1_step = t
-                    best_mask_prob = mask_prob.detach().clone()
-                    best_mask_hard = p_hard.detach().clone()
-                if t in save_expl_set and cfg.save_expl_dir:
-                    _save_expl_snapshot(x, p_hard, cfg.save_expl_dir, t, ef1, p_act, d_conf)
 
         if cfg.record_curve and (t % cfg.curve_every == 0 or t == 1 or t == cfg.steps):
             row = {k: float(v.detach().item()) for k, v in components.items()}
             row["total"] = float(loss_total.detach().item())
             row["step"] = t
-            row["p_actual"] = float(mask_prob.mean().item())
-            row["mu"] = mu
+            row["p_actual"] = float(mask_prob.flatten(1).mean(dim=1).mean().item())
+            row["mu"] = float(mu.mean().item()) if torch.is_tensor(mu) else float(mu)
             curve.append(row)
             if s_params is not None:
                 wcurve.append(
@@ -255,59 +274,67 @@ def train_mask(
 
         if cfg.log_every and (t == 1 or t % cfg.log_every == 0 or t == cfg.steps):
             with torch.no_grad():
-                top1 = int(logits_e.argmax(dim=1).item() == logits_x.argmax(dim=1).item())
-                p_now = float((mask_prob > cfg.mask_thresh).float().mean().item())
+                top1 = float((logits_e.argmax(dim=1) == logits_x.argmax(dim=1)).float().mean().item())
+                p_now = float((mask_prob > cfg.mask_thresh).float().flatten(1).mean(dim=1).mean().item())
+            inv = 1.0 / max(1, bsz)
             log(
-                f"  step {t:>4d}/{cfg.steps}  total={loss_total.item():.3f}  "
-                f"act={loss_act.item():.3f}  "
-                + ("" if cfg.no_ce else f"ce={loss_ce.item():.3f}  ")
-                + f"kl={loss_kl.item():.3f}  "
-                f"area={loss_area.item():.3f}  bin={loss_bin.item():.3f}  tv={loss_tv.item():.4f}  "
-                f"rob={loss_rob.item():.3f}  p={100.0 * p_now:.1f}%  top1={'Y' if top1 else 'N'}"
+                f"  step {t:>4d}/{cfg.steps}  total={loss_total.item() * inv:.3f}  "
+                f"act={loss_act.item() * inv:.3f}  "
+                + ("" if cfg.no_ce else f"ce={loss_ce.item() * inv:.3f}  ")
+                + f"kl={loss_kl.item() * inv:.3f}  "
+                f"area={loss_area.item() * inv:.3f}  bin={loss_bin.item() * inv:.3f}  tv={loss_tv.item() * inv:.4f}  "
+                f"rob={loss_rob.item() * inv:.3f}  p={100.0 * p_now:.1f}%  top1={top1:.2f}"
             )
 
     seconds = time.perf_counter() - t0
-    if cfg.keep_best_ef1 and best_mask_prob is not None and best_mask_hard is not None:
-        mask_prob = best_mask_prob
-        mask_hard = best_mask_hard
-        e = mask_hard.expand_as(x) * x
-        p_actual = float(mask_hard.mean().item())
+    mask_net.eval()
+    with torch.no_grad():
+        final_prob = torch.sigmoid(mask_net(x))
+        if cfg.constraint == "project" and cfg.p_target is not None:
+            final_prob = project_topk_mask(final_prob, cfg.p_target)
+        final_hard = (final_prob > cfg.mask_thresh).float()
+        final_e = final_hard.expand_as(x) * x
+
+    out: List[TrainResult] = []
+    for i in range(bsz):
+        if cfg.keep_best_ef1 and best_mask_prob[i] is not None and best_mask_hard[i] is not None:
+            mp = best_mask_prob[i]
+            mh = best_mask_hard[i]
+            ei = mh.expand_as(x[i : i + 1]) * x[i : i + 1]
+            p_actual = float(mh.mean().item())
+            be, bs = float(best_ef1[i]), int(best_ef1_step[i])
+        else:
+            mp = final_prob[i : i + 1]
+            mh = final_hard[i : i + 1]
+            ei = final_e[i : i + 1]
+            p_actual = float(mh.mean().item())
+            curve_i = ef1_curves[i]
+            be = max((row["ef1"] for row in curve_i), default=0.0)
+            bs = next((row["step"] for row in curve_i if row["ef1"] == be), 0)
         if cfg.log_every:
             log(
-                f"  best EF1={best_ef1:.4f} at step {best_ef1_step}  "
-                f"p_actual={100.0 * p_actual:.1f}%"
+                f"  img[{i}]  {seconds:.1f}s  p={100.0 * p_actual:.1f}%"
+                + (f"  best EF1={be:.4f} @ {bs}" if cfg.keep_best_ef1 else "")
             )
-    else:
-        mask_net.eval()
-        with torch.no_grad():
-            mask_prob = torch.sigmoid(mask_net(x))
-            if cfg.constraint == "project" and cfg.p_target is not None:
-                mask_prob = project_topk_mask(mask_prob, cfg.p_target)
-            mask_hard = (mask_prob > cfg.mask_thresh).float()
-            e = mask_hard.expand_as(x) * x
-            p_actual = float(mask_hard.mean().item())
-        best_ef1 = max((row["ef1"] for row in ef1_curve), default=0.0)
-        best_ef1_step = next((row["step"] for row in ef1_curve if row["ef1"] == best_ef1), 0)
-
-    if cfg.log_every:
-        log(f"  finished in {seconds:.1f}s  p_actual={100.0 * p_actual:.1f}%")
-
-    return TrainResult(
-        mask_prob=mask_prob.detach(),
-        mask_hard=mask_hard.detach(),
-        e=e.detach(),
-        seconds=seconds,
-        steps=cfg.steps,
-        lambdas=dict(cfg.lambdas),
-        seed=cfg.seed,
-        loss_curve=curve,
-        weight_curve=wcurve,
-        mu_final=mu,
-        p_actual=p_actual,
-        ef1_curve=ef1_curve,
-        best_ef1=float(best_ef1),
-        best_ef1_step=int(best_ef1_step),
-    )
+        out.append(
+            TrainResult(
+                mask_prob=mp.detach(),
+                mask_hard=mh.detach(),
+                e=ei.detach(),
+                seconds=seconds,
+                steps=cfg.steps,
+                lambdas=dict(cfg.lambdas),
+                seed=cfg.seed,
+                loss_curve=curve,
+                weight_curve=wcurve,
+                mu_final=float(mu[i].item()) if torch.is_tensor(mu) else float(mu),
+                p_actual=p_actual,
+                ef1_curve=ef1_curves[i],
+                best_ef1=float(be),
+                best_ef1_step=int(bs),
+            )
+        )
+    return out
 
 
 def _save_expl_snapshot(x, mask_hard, out_dir: str, step: int, ef1: float, p_act: float, d_conf: float) -> None:

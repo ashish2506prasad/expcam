@@ -22,7 +22,7 @@ from config import SEQUENTIAL_PLOT_ORDER, figure_dir, sequential_configs
 from data import load_tensor, qualitative_image_ids
 from io_utils import load_json, rows_to_excel, save_json
 from metrics import ef1_new_version
-from runner import maybe_train_and_eval, run_dir
+from runner import maybe_train_and_eval_many, run_dir
 from train import TrainConfig, image_seed, log
 from viz import ablation_bars, image_grid, panel_expl, panel_original
 
@@ -122,20 +122,25 @@ def run_ablation(args) -> None:
         bundle = load_classifier(backbone, device)
         for cfg_name, lambdas in sequential.items():
             log(f"--- {cfg_name} / {backbone} ---")
+            jobs = []
             for rec in images:
                 out_dir = run_dir(out_root, SECTION, backbone, cfg_name, rec["id"])
                 cfg = _train_cfg(args, rec, backbone, lambdas=lambdas)
-                row = maybe_train_and_eval(
-                    bundle,
-                    rec,
-                    Path(eval_set["root"]),
-                    out_dir,
-                    cfg,
-                    skip_existing=args.skip_existing,
-                    device=device,
-                    extra_metrics={"protocol": "sequential", "config": cfg_name},
+                jobs.append(
+                    {
+                        "rec": rec,
+                        "eval_root": Path(eval_set["root"]),
+                        "out_dir": out_dir,
+                        "cfg": cfg,
+                        "skip_existing": args.skip_existing,
+                        "extra_metrics": {"protocol": "sequential", "config": cfg_name},
+                    }
                 )
-                all_rows.append(row)
+            all_rows.extend(
+                maybe_train_and_eval_many(
+                    bundle, jobs, device, batch_size=getattr(args, "batch_size", 8)
+                )
+            )
 
     save_json(out_root / SECTION / "all_runs.json", all_rows)
     rows_to_excel(out_root / SECTION / "section1_results.xlsx", {"sequential": all_rows, "all": all_rows})

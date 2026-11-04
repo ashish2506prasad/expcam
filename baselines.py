@@ -19,7 +19,7 @@ except ImportError:
 
 ensure_pkg_path()
 
-from classifiers import ClassifierBundle
+from classifiers import ClassifierBundle, as_logits
 
 
 def _otsu(heatmap: np.ndarray) -> float:
@@ -60,11 +60,17 @@ def reshape_transform_vit(tensor: torch.Tensor, height: int = 14, width: int = 1
 def cam_target_layers(bundle: ClassifierBundle):
     """Library target layers, matching the pytorch_grad_cam README convention."""
     model = bundle.model
-    if bundle.name == "resnet18":
+    if bundle.cam_is_vit:
+        return [model.encoder.layers[-1].ln_1], reshape_transform_vit
+    if bundle.name.startswith("resnet"):
         return [model.layer4[-1]], None
-    if bundle.name == "efficientnet_b0":
+    if bundle.name.startswith("vgg"):
+        return [bundle.cam_layer], None
+    if bundle.name == "inception_v3":
+        return [model.Mixed_7c], None
+    if bundle.name.startswith("efficientnet"):
         return [model.features[-1]], None
-    return [model.encoder.layers[-1].ln_1], reshape_transform_vit
+    return [bundle.cam_layer], None
 
 
 def _library_cam(cam_cls, bundle: ClassifierBundle, x: torch.Tensor, class_idx: Optional[int] = None) -> torch.Tensor:
@@ -79,7 +85,7 @@ def _library_cam(cam_cls, bundle: ClassifierBundle, x: torch.Tensor, class_idx: 
     layers, reshape = cam_target_layers(bundle)
     if class_idx is None:
         with torch.no_grad():
-            class_idx = int(bundle.model(x).argmax(dim=1)[0].item())
+            class_idx = int(as_logits(bundle.model(x)).argmax(dim=1)[0].item())
     targets = [ClassifierOutputTarget(class_idx)]
     kwargs = {"model": bundle.model, "target_layers": layers}
     if reshape is not None:
@@ -165,14 +171,14 @@ def rise(
     g = torch.Generator(device="cpu")
     g.manual_seed(seed)
     b, c, h, w = x.shape
-    y = bundle.model(x).argmax(dim=1)
+    y = as_logits(bundle.model(x)).argmax(dim=1)
     scores = []
     masks = []
     for _ in range(n_masks):
         small = (torch.rand(1, 1, grid, grid, generator=g) < p1).float()
         up = F.interpolate(small, size=(h, w), mode="bilinear", align_corners=False).to(x.device)
         masked = x * up
-        conf = torch.softmax(bundle.model(masked), dim=1)[0, y[0]]
+        conf = torch.softmax(as_logits(bundle.model(masked)), dim=1)[0, y[0]]
         scores.append(conf)
         masks.append(up[0, 0])
     scores_t = torch.stack(scores)

@@ -7,11 +7,13 @@ import torch.nn as nn
 
 
 class PixelMask(nn.Module):
-    """Learnable 1×H×W mask logits. No U-Net / CSAE."""
+    """Learnable B×1×H×W mask logits. Slot i is the mask for image i only."""
 
-    def __init__(self, height: int, width: int, init: float = 0.0):
+    def __init__(self, height: int, width: int, batch_size: int = 1, init: float = 0.0):
         super().__init__()
-        self.logits = nn.Parameter(torch.full((1, 1, int(height), int(width)), float(init)))
+        self.logits = nn.Parameter(
+            torch.full((int(batch_size), 1, int(height), int(width)), float(init))
+        )
 
     def forward(self, x=None):
         return self.logits

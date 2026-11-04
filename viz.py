@@ -629,6 +629,51 @@ def panel_expl(x, mask, grey: float = GREY_BG) -> np.ndarray:
     return to_numpy_image(explanation_on_grey(x, mask, grey=grey))
 
 
+def save_xme_spatial_direct(
+    path: Path,
+    x,
+    mask_hard,
+    *,
+    original_label: str,
+    original_conf: float,
+    mask_label: str,
+    mask_target_conf: float,
+    explanation_label: str,
+    explanation_target_conf: float,
+    retained_pct: float,
+    ef1: float,
+    step: int | None = None,
+) -> None:
+    """x | mask | e labeled like EXP-CAM/exp-cam-spatial-direct.py."""
+    x_img = panel_original(x)
+    m = mask_hard
+    if hasattr(m, "detach"):
+        m = m.detach()
+        if m.dim() == 4:
+            m = m[0, 0]
+        elif m.dim() == 3:
+            m = m[0]
+        m = m.cpu().numpy()
+    e_img = panel_original(x * mask_hard.expand_as(x) if hasattr(mask_hard, "expand_as") else x)
+    fig, ax = plt.subplots(1, 3, figsize=(18, 6))
+    ax[0].imshow(np.clip(x_img, 0, 1))
+    ax[0].set_title(f"Original\n{original_label} | Conf: {original_conf:.4f}")
+    ax[0].axis("off")
+    ax[1].imshow(m, cmap="gray", vmin=0, vmax=1)
+    ax[1].set_title(f"Spatial Mask\n{mask_label} | Target Conf: {mask_target_conf:.4f}")
+    ax[1].axis("off")
+    ax[2].imshow(np.clip(e_img, 0, 1))
+    ax[2].set_title(f"Explanation\n{explanation_label} | Target Conf: {explanation_target_conf:.4f}")
+    ax[2].axis("off")
+    fig.suptitle(
+        f"Step {0 if step is None else step} | Pixels Retained: {retained_pct:.2f}% | EF1: {ef1:.4f}"
+    )
+    plt.tight_layout()
+    ensure_dir(path.parent)
+    fig.savefig(path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+
+
 def panel_cam_overlay(x, cam, alpha: float = 0.45) -> np.ndarray:
     """Red–blue CAM on the original image: red = important, blue = unimportant."""
     import torch

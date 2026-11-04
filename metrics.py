@@ -19,7 +19,7 @@ except ImportError:
 
 ensure_pkg_path()
 
-from classifiers import ClassifierBundle
+from classifiers import ClassifierBundle, as_logits
 from config import IMAGENET_MEAN, IMAGENET_STD, MASK_THRESH, N_INSERT_STEPS
 from losses import binarization_loss, tv8_loss
 
@@ -221,9 +221,9 @@ def evaluate_explanation(
         m1 = m1.expand_as(x)
     e_del = (1.0 - m1) * x
     with torch.no_grad():
-        logits_x = bundle.model(x)
-        logits_e = bundle.model(e)
-        logits_del = bundle.model(e_del)
+        logits_x = as_logits(bundle.model(x))
+        logits_e = as_logits(bundle.model(e))
+        logits_del = as_logits(bundle.model(e_del))
     y = logits_x.argmax(dim=1)
     px = F.softmax(logits_x, dim=1)
     pe = F.softmax(logits_e, dim=1)

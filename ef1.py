@@ -17,13 +17,10 @@ ensure_pkg_path()
 
 from cli import add_common_args, lambdas_from_args, resolve_run
 from classifiers import load_classifier
-from config import (
-    SECTION0_PER_CLASS,
-    figure_dir,
-)
+from config import IMG_PER_CLASS, figure_dir
 from io_utils import export_metric_csvs, load_json, rows_to_excel, save_json
 from metrics import CAM_TABLE_KEYS
-from runner import maybe_train_and_eval, run_dir
+from runner import maybe_train_and_eval_many, run_dir
 from train import TrainConfig, image_seed, log
 from viz import plot_ef1_section0_figures
 
@@ -104,13 +101,9 @@ def _plot_ef1_for_backbone(out_root, section, backbone, subset, hline) -> dict:
 
 
 def _apply_subset_args(args) -> None:
-    """--subset: 2 images/class, slots 0 and 1 (same as freq_expcam --subset)."""
-    if getattr(args, "quick", False):
-        args.section0_per_class = 1
-        args.section0_slots = [0]
-    elif getattr(args, "subset", False):
-        args.section0_per_class = 2
-        args.img_per_class = 2
+    """--subset: 2 images/class. --quick already forces 1 in resolve_run."""
+    if getattr(args, "subset", False) and not getattr(args, "quick", False):
+        args.img_per_class = IMG_PER_CLASS
 
 
 def run_section0(args) -> None:
@@ -131,6 +124,7 @@ def run_section0(args) -> None:
     for backbone in args.backbones:
         log(f"Loading classifier {backbone} ...")
         bundle = load_classifier(backbone, device)
+        jobs = []
         for rec in subset:
             out_dir = run_dir(out_root, section, backbone, "ef1_full", rec["id"])
             cfg = TrainConfig(
@@ -143,20 +137,25 @@ def run_section0(args) -> None:
                 keep_best_ef1=True,
                 ef1_version=ef1_version,
             )
-            row = maybe_train_and_eval(
-                bundle,
-                rec,
-                eval_root,
-                out_dir,
-                cfg,
-                skip_existing=args.skip_existing,
-                device=device,
-                extra_metrics={
-                    "protocol": "ef1_new" if args.ef1_new_version else "ef1",
-                    "config": "Full_no_ce",
-                    "ef1_version": ef1_version,
-                },
+            jobs.append(
+                {
+                    "rec": rec,
+                    "eval_root": eval_root,
+                    "out_dir": out_dir,
+                    "cfg": cfg,
+                    "skip_existing": args.skip_existing,
+                    "extra_metrics": {
+                        "protocol": "ef1_new" if args.ef1_new_version else "ef1",
+                        "config": "Full_no_ce",
+                        "ef1_version": ef1_version,
+                    },
+                }
             )
+        trained = maybe_train_and_eval_many(
+            bundle, jobs, device, batch_size=getattr(args, "batch_size", 8)
+        )
+        for rec, row in zip(subset, trained):
+            out_dir = run_dir(out_root, section, backbone, "ef1_full", rec["id"])
             curve = load_json(out_dir / "ef1_curve.json") if (out_dir / "ef1_curve.json").exists() else []
             if curve:
                 row["ef1_final"] = curve[-1]["ef1"]
@@ -215,13 +214,7 @@ def main(argv=None):
     p.add_argument(
         "--subset",
         action="store_true",
-        help="Use 2 images per class (overrides --img-per-class).",
-    )
-    p.add_argument(
-        "--section0-per-class",
-        type=int,
-        default=SECTION0_PER_CLASS,
-        help="Images per class for Section 0. Overridden by --subset.",
+        help="Use --img-per-cls default (2) images per class.",
     )
     p.add_argument(
         "--figures-only",

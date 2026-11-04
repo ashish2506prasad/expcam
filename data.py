@@ -19,10 +19,6 @@ from PIL import Image
 from config import (
     DEFAULT_BACKBONES,
     IMG_PER_CLASS,
-    N_CLASSES,
-    N_PER_CLASS,
-    QUALITATIVE_PER_CLASS,
-    SECTION0_PER_CLASS,
     SEED,
     TRAINX_CLASSES,
     add_where_args,
@@ -56,15 +52,36 @@ def _class_meta(wnid: str) -> Dict:
     return {"class_name": wnid, "imagenet_idx": -1}
 
 
+def resolve_class_root(root: Path) -> Path:
+    """If ``root`` has no class folders, look one level down for ImageNet val."""
+    root = Path(root)
+    if is_image_file(root) or discover_class_folders(root):
+        return root
+    nested = []
+    if root.is_dir():
+        for name in ("val", "validation", "ILSVRC/Data/CLS-LOC/val"):
+            cand = root / name
+            if cand.is_dir() and discover_class_folders(cand):
+                return cand
+        for p in sorted(root.iterdir(), key=lambda x: x.name):
+            if p.is_dir() and discover_class_folders(p):
+                nested.append(p)
+    if len(nested) == 1:
+        return nested[0]
+    return root
+
+
 def select_records(
     root: Path,
     img_per_class: int = IMG_PER_CLASS,
     num_classes: Optional[int] = None,
+    sample: str = "first",
+    seed: int = SEED,
 ) -> Dict:
     """Build an in-memory image list. Does not write eval_set.json.
 
-    Folder: first ``num_classes`` synset dirs (sorted), first ``img_per_class``
-    files in each (sorted names). File: a single-image run.
+    ``sample='first'`` (local): first ``img_per_class`` sorted files per class.
+    ``sample='random'`` (kaggle): ``img_per_class`` files per class with ``seed``.
     """
     root = Path(root)
     images: List[Dict] = []
@@ -83,19 +100,26 @@ def select_records(
         data_root = root.parent
         classes = [rec["wnid"]]
     else:
-        data_root = root
-        classes = discover_class_folders(root)
+        data_root = resolve_class_root(root)
+        classes = discover_class_folders(data_root)
         if num_classes is not None:
             classes = classes[: max(0, int(num_classes))]
         n_img = max(1, int(img_per_class))
+        rng = np.random.RandomState(int(seed))
         for class_i, wnid in enumerate(classes):
-            files = list_class_images(root, wnid)[:n_img]
+            files = list_class_images(data_root, wnid)
+            if sample == "random" and len(files) > n_img:
+                pick = rng.choice(len(files), size=n_img, replace=False)
+                pick.sort()
+                files = [files[int(i)] for i in pick]
+            else:
+                files = files[:n_img]
             meta = _class_meta(wnid)
             for p in files:
                 images.append(
                     {
                         "id": f"{len(images):03d}",
-                        "relpath": str(p.relative_to(root)).replace("\\", "/"),
+                        "relpath": str(p.relative_to(data_root)).replace("\\", "/"),
                         "wnid": wnid,
                         "class_name": meta["class_name"],
                         "imagenet_idx": meta["imagenet_idx"],
@@ -105,7 +129,7 @@ def select_records(
                 )
     print(
         f"[data] {len(images)} images, {len(classes)} classes from {data_root} "
-        f"(img-per-class={img_per_class}, num-classes={num_classes or 'all'})",
+        f"(img-per-class={img_per_class}, num-classes={num_classes or 'all'}, sample={sample})",
         flush=True,
     )
     return {
@@ -145,7 +169,7 @@ def list_class_images(root: Path, wnid: str) -> List[Path]:
 
 def build_eval_set(
     root: Optional[Path] = None,
-    n_per_class: int = N_PER_CLASS,
+    n_per_class: int = IMG_PER_CLASS,
     seed: int = SEED,
     force: bool = False,
     path: Optional[Path] = None,
@@ -172,11 +196,10 @@ def build_eval_set(
     for wnid in skipped:
         n = len(list_class_images(root, wnid))
         print(f"[eval-set] skip {wnid} ({TRAINX_CLASSES[wnid]['name']}): {n} images < {n_per_class}")
-    n_want = N_CLASSES if N_CLASSES is not None else len(classes_present)
-    if len(classes_present) < (N_CLASSES or 1):
+    n_want = len(classes_present)
+    if not classes_present:
         raise RuntimeError(
-            f"Need at least {N_CLASSES or 1} class folder(s) in {root} with ≥{n_per_class} images; "
-            f"found {len(classes_present)}: {classes_present}"
+            f"Need at least 1 class folder in {root} with ≥{n_per_class} images; found none"
         )
     classes_present = classes_present[:n_want]
     for class_i, wnid in enumerate(classes_present):
@@ -210,7 +233,7 @@ def build_eval_set(
         "backbones": list(DEFAULT_BACKBONES),
         "qualitative_ids": qualitative_image_ids(
             {"images": images, "classes": classes_present},
-            per_class=min(QUALITATIVE_PER_CLASS, n_per_class),
+            per_class=min(IMG_PER_CLASS, n_per_class),
         ),
         "curve_image_id": images[0]["id"],
         "images": images,
@@ -288,7 +311,7 @@ def section0_image_records(
     (indices 0, 1, …). Passing ``slots`` picks those indices instead.
     """
     if per_class is None:
-        per_class = SECTION0_PER_CLASS
+        per_class = IMG_PER_CLASS
     if slots is None:
         slots = tuple(range(int(per_class)))
     else:
@@ -307,7 +330,7 @@ def section0_image_records(
 def qualitative_image_ids(eval_set: Dict, per_class: Optional[int] = None) -> List[str]:
     """Stable qualitative panel set: first `per_class` eval images from each class."""
     if per_class is None:
-        per_class = QUALITATIVE_PER_CLASS
+        per_class = IMG_PER_CLASS
     by_class = records_by_class(eval_set)
     class_order = eval_set.get("classes") or sorted(by_class.keys())
     ids: List[str] = []

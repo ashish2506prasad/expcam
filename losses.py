@@ -20,15 +20,20 @@ def hard_st(p: torch.Tensor, thresh: float = 0.5) -> torch.Tensor:
     return p + (m_hard - p).detach()
 
 
+def _sum_mean_per_sample(t: torch.Tensor) -> torch.Tensor:
+    """Mean over non-batch dims, then sum over batch. B=1 matches a solo run."""
+    return t.reshape(t.shape[0], -1).mean(dim=1).sum()
+
+
 def ce_loss(logits_x: torch.Tensor, logits_e: torch.Tensor) -> torch.Tensor:
     y_star = logits_x.argmax(dim=1)
-    return F.cross_entropy(logits_e, y_star)
+    return F.cross_entropy(logits_e, y_star, reduction="none").sum()
 
 
 def kl_loss(logits_x: torch.Tensor, logits_e: torch.Tensor, temperature: float = 1.0) -> torch.Tensor:
     p_x = F.softmax(logits_x / temperature, dim=1)
     log_p_e = F.log_softmax(logits_e / temperature, dim=1)
-    return F.kl_div(log_p_e, p_x, reduction="batchmean") * (temperature ** 2)
+    return F.kl_div(log_p_e, p_x, reduction="none").sum() * (temperature ** 2)
 
 
 def cosine_loss(feat_x: torch.Tensor, feat_e: torch.Tensor, eps: float = 1e-8) -> torch.Tensor:
@@ -42,7 +47,7 @@ def cosine_loss(feat_x: torch.Tensor, feat_e: torch.Tensor, eps: float = 1e-8) -
     feat_x = F.normalize(feat_x, dim=1, eps=eps)
     feat_e = F.normalize(feat_e, dim=1, eps=eps)
     cos = (feat_x * feat_e).sum(dim=1)
-    return 1 - cos.mean()
+    return (1 - cos.mean(dim=1)).sum()
 
 
 def mse_loss(feat_x: torch.Tensor, feat_e: torch.Tensor) -> torch.Tensor:
@@ -53,21 +58,21 @@ def mse_loss(feat_x: torch.Tensor, feat_e: torch.Tensor) -> torch.Tensor:
         std = flat.std(dim=-1, keepdim=True) + 1e-6
         return ((flat - mean) / std).view_as(t)
 
-    return F.mse_loss(norm(feat_x), norm(feat_e))
+    return _sum_mean_per_sample((norm(feat_x) - norm(feat_e)).pow(2))
 
 
 def area_loss(mask_prob: torch.Tensor) -> torch.Tensor:
-    return mask_prob.mean()
+    return _sum_mean_per_sample(mask_prob)
 
 
 def binarization_loss(mask_prob: torch.Tensor) -> torch.Tensor:
-    return (mask_prob * (1.0 - mask_prob)).mean()
+    return _sum_mean_per_sample(mask_prob * (1.0 - mask_prob))
 
 
 def tv_loss(mask_prob: torch.Tensor) -> torch.Tensor:
-    dh = torch.abs(mask_prob[:, :, 1:, :] - mask_prob[:, :, :-1, :]).mean()
-    dw = torch.abs(mask_prob[:, :, :, 1:] - mask_prob[:, :, :, :-1]).mean()
-    return dh + dw
+    dh = torch.abs(mask_prob[:, :, 1:, :] - mask_prob[:, :, :-1, :])
+    dw = torch.abs(mask_prob[:, :, :, 1:] - mask_prob[:, :, :, :-1])
+    return _sum_mean_per_sample(dh) + _sum_mean_per_sample(dw)
 
 
 def tv8_loss(p: torch.Tensor, w_ax: float = 1.0, w_diag: float = 1.0 / 1.41421356237, eps: float = 0.0) -> torch.Tensor:
@@ -77,11 +82,11 @@ def tv8_loss(p: torch.Tensor, w_ax: float = 1.0, w_diag: float = 1.0 / 1.4142135
         d = (a - b).abs()
         return d if eps == 0 else torch.sqrt(d * d + eps)
 
-    tv = w_ax * diff(p[:, :, 1:, :], p[:, :, :-1, :]).mean()
-    tv = tv + w_ax * diff(p[:, :, :, 1:], p[:, :, :, :-1]).mean()
+    tv = w_ax * _sum_mean_per_sample(diff(p[:, :, 1:, :], p[:, :, :-1, :]))
+    tv = tv + w_ax * _sum_mean_per_sample(diff(p[:, :, :, 1:], p[:, :, :, :-1]))
     center = p[:, :, 1:, 1:]
-    tv = tv + w_diag * diff(center, p[:, :, :-1, :-1]).mean()
-    tv = tv + w_diag * diff(p[:, :, 1:, :-1], p[:, :, :-1, 1:]).mean()
+    tv = tv + w_diag * _sum_mean_per_sample(diff(center, p[:, :, :-1, :-1]))
+    tv = tv + w_diag * _sum_mean_per_sample(diff(p[:, :, 1:, :-1], p[:, :, :-1, 1:]))
     return tv
 
 
@@ -103,7 +108,7 @@ def abductive_loss(
         r = r.to(x.device)
         e_r = mask * x + (1.0 - mask) * r
         log_pe = F.log_softmax(model(e_r) / temperature, dim=1)
-        loss = loss + F.kl_div(log_pe, px, reduction="batchmean") * (temperature ** 2)
+        loss = loss + F.kl_div(log_pe, px, reduction="none").sum() * (temperature ** 2)
         n += 1
     return loss / max(1, n)
 

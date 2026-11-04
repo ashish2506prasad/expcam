@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, List, Optional, Sequence
 
 import torch
 
@@ -18,7 +18,7 @@ from classifiers import ClassifierBundle
 from data import load_tensor
 from io_utils import load_json, save_json
 from metrics import CAM_FAITHFULNESS_KEYS, evaluate_explanation
-from train import TrainConfig, TrainResult, image_seed, log, save_mask_tensors, train_mask
+from train import TrainConfig, TrainResult, log, save_mask_tensors, train_mask, train_mask_batch
 
 
 def run_dir(root: Path, section: str, backbone: str, config_name: str, image_id: str) -> Path:
@@ -47,13 +47,13 @@ def maybe_train_and_eval(
     if skip_existing and metrics_path.exists():
         log(f"[skip] {who}")
         payload = load_json(metrics_path)
-        need_preview = not (out_dir / "x.png").exists() and (out_dir / "masks.pt").exists()
+        need_preview = not (out_dir / "x_m_e.png").exists() and (out_dir / "masks.pt").exists()
         need_cam = any(k not in payload for k in CAM_FAITHFULNESS_KEYS)
         if need_preview or need_cam:
             x = load_tensor(rec, bundle.preprocess, device, root=eval_root)
             mask_hard, mask_prob = load_masks(out_dir, device)
             if need_preview:
-                save_spatial_previews(out_dir, x, mask_hard, mask_prob)
+                save_spatial_previews(out_dir, bundle, x, mask_hard, mask_prob, payload)
             if need_cam:
                 payload.update(evaluate_explanation(bundle, x, mask_hard, mask_prob=mask_prob))
                 save_json(metrics_path, payload)
@@ -63,6 +63,18 @@ def maybe_train_and_eval(
     log(f"[train] {who}  steps={cfg.steps}")
     x = load_tensor(rec, bundle.preprocess, device, root=eval_root)
     result: TrainResult = train_mask(bundle, x, cfg)
+    return _finalize_train(bundle, rec, x, out_dir, cfg, result, extra_metrics)
+
+
+def _finalize_train(
+    bundle: ClassifierBundle,
+    rec: dict,
+    x: torch.Tensor,
+    out_dir: Path,
+    cfg: TrainConfig,
+    result: TrainResult,
+    extra_metrics: Optional[Dict] = None,
+) -> Dict:
     metrics = evaluate_explanation(
         bundle,
         x,
@@ -91,34 +103,64 @@ def maybe_train_and_eval(
         **metrics,
         **(extra_metrics or {}),
     }
-    save_json(metrics_path, payload)
+    save_json(out_dir / "metrics.json", payload)
     log(
         f"[done]  img={rec['id']}  {result.seconds:.1f}s  "
         f"p={metrics['p_actual_pct']:.1f}%  top1={int(metrics['top1_agreement'])}  "
         f"conf={metrics['conf_e']:.3f}  kl={metrics['kl_divergence']:.3f}"
     )
-    if cfg.record_curve and result.loss_curve:
-        save_json(out_dir / "loss_curve.json", result.loss_curve)
-    if result.weight_curve:
-        save_json(out_dir / "weight_curve.json", result.weight_curve)
     if result.ef1_curve:
         save_json(out_dir / "ef1_curve.json", result.ef1_curve)
     save_mask_tensors(out_dir, result)
-    save_spatial_previews(out_dir, x, result.mask_hard, result.mask_prob)
-    save_json(
-        out_dir / "train_meta.json",
-        {
-            "seconds": result.seconds,
-            "steps": result.steps,
-            "seed": result.seed,
-            "optimizer": "Adam",
-            "lr": cfg.lr,
-            "per_image": True,
-            "architecture": "PixelMask",
-            "mask_model": "none",
-        },
-    )
+    save_spatial_previews(out_dir, bundle, x, result.mask_hard, result.mask_prob, payload)
     return payload
+
+
+def maybe_train_and_eval_many(
+    bundle: ClassifierBundle,
+    jobs: Sequence[dict],
+    device: torch.device,
+    batch_size: int = 8,
+) -> List[Dict]:
+    """Train several images with batched classifier forwards; one mask per image.
+
+    Each job: ``{rec, eval_root, out_dir, cfg, extra_metrics, skip_existing}``.
+    Results stay in job order. Writes happen once per image after training.
+    """
+    n = len(jobs)
+    results: List[Optional[Dict]] = [None] * n
+    pending: List[tuple] = []
+    bs = max(1, int(batch_size))
+
+    def flush():
+        if not pending:
+            return
+        xs = torch.cat([j["x"] for _, j in pending], dim=0)
+        cfg = pending[0][1]["cfg"]
+        log(f"[train-batch] {bundle.name}  n={len(pending)}  steps={cfg.steps}")
+        trained = train_mask_batch(bundle, xs, cfg)
+        for (idx, job), result in zip(pending, trained):
+            results[idx] = _finalize_train(
+                bundle, job["rec"], job["x"], job["out_dir"], job["cfg"], result, job.get("extra_metrics")
+            )
+        pending.clear()
+
+    for i, job in enumerate(jobs):
+        rec = job["rec"]
+        out_dir = job["out_dir"]
+        extra = job.get("extra_metrics")
+        if job.get("skip_existing") and (out_dir / "metrics.json").exists():
+            results[i] = maybe_train_and_eval(
+                bundle, rec, job["eval_root"], out_dir, job["cfg"], True, device, extra
+            )
+            continue
+        pending.append(
+            (i, {**job, "x": load_tensor(rec, bundle.preprocess, device, root=job["eval_root"])})
+        )
+        if len(pending) >= bs:
+            flush()
+    flush()
+    return [r for r in results if r is not None]
 
 
 def load_masks(out_dir: Path, device: torch.device):
@@ -126,24 +168,58 @@ def load_masks(out_dir: Path, device: torch.device):
     return blob["mask_hard"].to(device), blob["mask_prob"].to(device)
 
 
-def save_spatial_previews(out_dir: Path, x, mask_hard, mask_prob) -> None:
-    """Write x / mask / explanation PNGs next to masks.pt."""
+def save_spatial_previews(out_dir: Path, bundle, x, mask_hard, mask_prob, metrics=None) -> None:
+    """Write e.png and a spatial-direct-style x_m_e.png next to masks.pt."""
     import numpy as np
+    import torch
+    import torch.nn.functional as F
     from PIL import Image
 
+    from classifiers import as_logits
+    from config import IMAGENET_MEAN, IMAGENET_STD
     from io_utils import ensure_dir
-    from viz import panel_expl, panel_mask, panel_original, triple_panel
+    from viz import panel_original, save_xme_spatial_direct
 
     dest = ensure_dir(Path(out_dir))
-    x_np = panel_original(x)
-    m_hard = panel_mask(mask_hard)
-    m_prob = panel_mask(mask_prob)
-    e_np = panel_expl(x, mask_hard)
-    Image.fromarray((np.clip(x_np, 0, 1) * 255).astype(np.uint8)).save(dest / "x.png")
-    Image.fromarray((np.clip(m_hard, 0, 1) * 255).astype(np.uint8)).save(dest / "mask_hard.png")
-    Image.fromarray((np.clip(m_prob, 0, 1) * 255).astype(np.uint8)).save(dest / "mask_prob.png")
+    m = mask_hard.float()
+    if m.dim() == 3:
+        m = m.unsqueeze(0)
+    e = m.expand_as(x) * x
+    e_np = panel_original(e)
     Image.fromarray((np.clip(e_np, 0, 1) * 255).astype(np.uint8)).save(dest / "e.png")
-    triple_panel(dest / "x_m_e.png", x_np, m_hard, e_np, labels=("x", "m (hard)", "e = m⊙x"))
+
+    mean = x.new_tensor(IMAGENET_MEAN).view(1, 3, 1, 1)
+    std = x.new_tensor(IMAGENET_STD).view(1, 3, 1, 1)
+    mask_in = (m.expand(-1, 3, -1, -1) - mean) / std
+    with torch.no_grad():
+        logits_x = as_logits(bundle.model(x))
+        logits_e = as_logits(bundle.model(e))
+        logits_m = as_logits(bundle.model(mask_in))
+    y = int(logits_x.argmax(dim=1)[0].item())
+    px = F.softmax(logits_x, dim=1)
+    pe = F.softmax(logits_e, dim=1)
+    pm = F.softmax(logits_m, dim=1)
+    ei = int(logits_e.argmax(dim=1)[0].item())
+    mi = int(logits_m.argmax(dim=1)[0].item())
+    labels = bundle.labels
+    retained_pct = float(m.mean().item()) * 100.0
+    met = metrics or {}
+    ef1 = float(met.get("best_ef1", met.get("ef1_conf", met.get("ef1", 0.0))))
+    step = met.get("best_ef1_step")
+    save_xme_spatial_direct(
+        dest / "x_m_e.png",
+        x,
+        m,
+        original_label=labels[y] if 0 <= y < len(labels) else str(y),
+        original_conf=float(px[0, y].item()),
+        mask_label=labels[mi] if 0 <= mi < len(labels) else str(mi),
+        mask_target_conf=float(pm[0, y].item()),
+        explanation_label=labels[ei] if 0 <= ei < len(labels) else str(ei),
+        explanation_target_conf=float(pe[0, y].item()),
+        retained_pct=retained_pct,
+        ef1=ef1,
+        step=0 if step is None else int(step),
+    )
 
 
 def export_spatial_pack(export_root: Path, backbone: str, rec: dict, src_dir: Path) -> Path:
@@ -154,15 +230,7 @@ def export_spatial_pack(export_root: Path, backbone: str, rec: dict, src_dir: Pa
 
     cname = str(rec.get("class_name", "class")).replace(" ", "_")
     dest = ensure_dir(Path(export_root) / backbone / f"{rec['id']}_{cname}")
-    for name in (
-        "masks.pt",
-        "metrics.json",
-        "x.png",
-        "mask_hard.png",
-        "mask_prob.png",
-        "e.png",
-        "x_m_e.png",
-    ):
+    for name in ("masks.pt", "ef1_curve.json", "e.png", "x_m_e.png"):
         src = Path(src_dir) / name
         if src.exists():
             copy2(src, dest / name)
