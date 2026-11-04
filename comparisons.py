@@ -252,7 +252,7 @@ def run_section3(args) -> None:
         if missing:
             log(f"  training EXP-CAM for {len(missing)} images (batched)")
             maybe_train_and_eval_many(
-                bundle, missing, device, batch_size=getattr(args, "batch_size", 8)
+                bundle, missing, device, batch_size=args.batch_size
             )
 
         for rec in images:

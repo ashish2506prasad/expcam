@@ -138,7 +138,7 @@ def run_ablation(args) -> None:
                 )
             all_rows.extend(
                 maybe_train_and_eval_many(
-                    bundle, jobs, device, batch_size=getattr(args, "batch_size", 8)
+                    bundle, jobs, device, batch_size=args.batch_size
                 )
             )
 

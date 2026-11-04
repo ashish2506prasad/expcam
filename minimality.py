@@ -128,7 +128,7 @@ def run_section2(args) -> None:
                     }
                 )
             trained = maybe_train_and_eval_many(
-                bundle, jobs, device, batch_size=getattr(args, "batch_size", 8)
+                bundle, jobs, device, batch_size=args.batch_size
             )
             for rec, row in zip(images, trained):
                 cfg_name = f"budget_p{p:g}"
@@ -605,7 +605,7 @@ def run_sensitivity(args) -> None:
         f"images={len(images)}  compare={compare}"
     )
     cmp_rows = []
-    bs = getattr(args, "batch_size", 8)
+    bs = args.batch_size
     for backbone in args.backbones:
         bundle = load_classifier(backbone, device)
         fig_dir = ensure_dir(_figure_dir(args.out, backbone) / "sensitivity")

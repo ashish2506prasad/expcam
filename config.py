@@ -242,6 +242,13 @@ def add_where_args(p):
         default=None,
         help="Use the first N class folders (sorted names). Default: all.",
     )
+    p.add_argument(
+        "--batch-size",
+        type=int,
+        default=BATCH_SIZE,
+        dest="batch_size",
+        help="Images per classifier forward during PixelMask training. Default: 64.",
+    )
     p.set_defaults(zip_out=None)
     p.add_argument(
         "--zip-out",

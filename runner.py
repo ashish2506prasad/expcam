@@ -15,6 +15,7 @@ except ImportError:
 ensure_pkg_path()
 
 from classifiers import ClassifierBundle
+from config import BATCH_SIZE
 from data import load_tensor
 from io_utils import load_json, save_json
 from metrics import CAM_FAITHFULNESS_KEYS, evaluate_explanation
@@ -120,7 +121,7 @@ def maybe_train_and_eval_many(
     bundle: ClassifierBundle,
     jobs: Sequence[dict],
     device: torch.device,
-    batch_size: int = 8,
+    batch_size: int = BATCH_SIZE,
 ) -> List[Dict]:
     """Train several images with batched classifier forwards; one mask per image.
 

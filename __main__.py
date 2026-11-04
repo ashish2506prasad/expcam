@@ -24,7 +24,7 @@ kaggle: random N files per class (seeded). Point --data-root at ImageNet val.
 Backbones: vgg11 vgg16 vgg19 resnet18 resnet50 vit_b_16 vit_l_16 efficientnet_b0 inception_v3
 
   python __main__.py 0 --where kaggle --data-root /kaggle/input/<imagenet-val> \\
-      --out /kaggle/working/expcam_spatial --backbones vit_b_16 --img-per-cls 2
+      --out /kaggle/working/expcam_spatial --backbones vit_b_16 --img-per-cls 2 --batch-size 64
 
   python __main__.py 2 --sensitivity --where kaggle --data-root /kaggle/input/<slug>/trainX1_subset \\
       --out /kaggle/working/expcam_spatial --backbones vit_b_16
