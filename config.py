@@ -51,7 +51,7 @@ def figure_dir(out_root: Path, section: str, backbone: str) -> Path:
 
 # Shared PixelMask training length for every section (override with --steps).
 STEPS = 1000
-BATCH_SIZE = 512
+BATCH_SIZE = 256
 LR = 5e-4
 OPTIMIZER_NAME = "adam"
 TEMPERATURE = 2.0
