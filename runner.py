@@ -204,7 +204,7 @@ def save_spatial_previews(out_dir: Path, bundle, x, mask_hard, mask_prob, metric
     labels = bundle.labels
     retained_pct = float(m.mean().item()) * 100.0
     met = metrics or {}
-    ef1 = float(met.get("best_ef1", met.get("ef1_conf", met.get("ef1", 0.0))))
+    ef1 = float(met.get("best_ef1", met.get("ef1", 0.0)))
     step = met.get("best_ef1_step")
     save_xme_spatial_direct(
         dest / "x_m_e.png",

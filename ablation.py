@@ -21,7 +21,7 @@ from classifiers import load_classifier
 from config import SEQUENTIAL_PLOT_ORDER, figure_dir, sequential_configs
 from data import load_tensor, qualitative_image_ids
 from io_utils import load_json, rows_to_excel, save_json
-from metrics import ef1_new_version
+from metrics import explanation_f1
 from runner import maybe_train_and_eval_many, run_dir
 from train import TrainConfig, image_seed, log
 from viz import ablation_bars, image_grid, panel_expl, panel_original
@@ -49,7 +49,7 @@ SECTION = "section1"
 
 def _row_ef1(row: dict) -> float:
     if "conf_e" in row and "p_actual" in row:
-        return ef1_new_version(row["conf_e"], row["p_actual"])
+        return explanation_f1(row["conf_e"], row["p_actual"])
     return float(row.get("ef1", 0.0))
 
 

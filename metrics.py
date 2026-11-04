@@ -41,21 +41,8 @@ def confidence_delta(logits_x: torch.Tensor, logits_e: torch.Tensor) -> float:
     return float((pe[range(len(y)), y] - px[range(len(y)), y]).mean().item())
 
 
-def explanation_f1(delta_conf: float, p_actual: float) -> float:
-    """EF1 = HM(1 - |Δconf|, 1 − p_actual).
-
-    Harmonic mean of 1 minus absolute confidence delta and mask sparsity (1 − area).
-    """
-    a = max(0.0, 1.0 - abs(float(delta_conf)))
-    b = max(0.0, 1.0 - float(p_actual))
-    denom = a + b
-    if denom <= 0.0:
-        return 0.0
-    return 2.0 * a * b / denom
-
-
-def ef1_new_version(confidence: float, p_actual: float) -> float:
-    """EF1 (new) = HM(confidence, 1 − p_actual)."""
+def explanation_f1(confidence: float, p_actual: float) -> float:
+    """EF1 = HM(confidence, 1 − p_actual)."""
     a = max(0.0, float(confidence))
     b = max(0.0, 1.0 - float(p_actual))
     denom = a + b
@@ -149,7 +136,6 @@ CAM_TABLE_KEYS = (
     "adcc",
     "add",
     "ef1",
-    "ef1_conf",
     "top1_agreement",
     "p_actual",
     "conf_e",
@@ -248,8 +234,7 @@ def evaluate_explanation(
     if backgrounds is not None:
         out["robustness_accuracy"] = robustness_accuracy(bundle.model, x, m, backgrounds, y=y)
     out.update(fidelity_bundle(logits_x, logits_e))
-    out["ef1"] = explanation_f1(out["confidence_delta"], out["p_actual"])
-    out["ef1_conf"] = ef1_new_version(out["conf_e"], out["p_actual"])
+    out["ef1"] = explanation_f1(out["conf_e"], out["p_actual"])
     out["abs_confidence_delta"] = abs(out["confidence_delta"])
     conf_del = float(pdel[0, y[0]].item())
     out["conf_del"] = conf_del

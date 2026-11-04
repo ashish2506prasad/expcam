@@ -21,7 +21,7 @@ ensure_pkg_path()
 
 from classifiers import ClassifierBundle, run_with_acts
 from config import DEFAULT_LAMBDAS, LR, MASK_THRESH, ROB_K_BACKGROUNDS, SEED, STEPS, TEMPERATURE
-from metrics import ef1_new_version, explanation_f1
+from metrics import explanation_f1
 from losses import (
     abductive_loss,
     area_loss,
@@ -78,7 +78,6 @@ class TrainConfig:
     no_ce: bool = False  # when True, CE loss is omitted from the training objective
     record_ef1: bool = False
     keep_best_ef1: bool = False  # return mask from the step with highest EF1
-    ef1_version: str = "legacy"  # "legacy" | "new" (ef1_new_version in metrics.py)
     save_expl_steps: Optional[Sequence[int]] = None
     save_expl_dir: Optional[str] = None
 
@@ -236,10 +235,7 @@ def train_mask_batch(
                 for i in range(bsz):
                     p_act = float(p_act_b[i].item())
                     d_conf = float(d_conf_b[i].item())
-                    if cfg.ef1_version == "new":
-                        ef1 = ef1_new_version(float(pe[i, y[i]].item()), p_act)
-                    else:
-                        ef1 = explanation_f1(d_conf, p_act)
+                    ef1 = explanation_f1(float(pe[i, y[i]].item()), p_act)
                     last_ef1 = ef1
                     if track_ef1:
                         ef1_curves[i].append(

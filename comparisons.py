@@ -143,7 +143,6 @@ def _metric_row(rec, backbone, method, mode, met, extra=None) -> dict:
         "adcc": met.get("adcc"),
         "add": met.get("add"),
         "ef1": met.get("ef1"),
-        "ef1_conf": met.get("ef1_conf"),
         "kl_divergence": met.get("kl_divergence"),
         "insertion_auc": met.get("insertion_auc"),
         "best_ef1": met.get("best_ef1"),

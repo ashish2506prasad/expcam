@@ -26,7 +26,7 @@ from viz import plot_ef1_section0_figures
 
 
 def _section_name(args) -> str:
-    return "section0_new_score" if getattr(args, "ef1_new_version", False) else "section0"
+    return "section0"
 
 
 def _curve_rows_from_runs(out_root: Path, section: str, backbone: str, subset) -> list:
@@ -112,7 +112,6 @@ def run_section0(args) -> None:
     section = _section_name(args)
     steps = args.steps
     rows = []
-    ef1_version = "new" if args.ef1_new_version else "legacy"
     eval_root = Path(eval_set["root"])
     lambdas = lambdas_from_args(args)
 
@@ -135,7 +134,6 @@ def run_section0(args) -> None:
                 no_ce=args.no_ce,
                 record_ef1=True,
                 keep_best_ef1=True,
-                ef1_version=ef1_version,
             )
             jobs.append(
                 {
@@ -145,9 +143,8 @@ def run_section0(args) -> None:
                     "cfg": cfg,
                     "skip_existing": args.skip_existing,
                     "extra_metrics": {
-                        "protocol": "ef1_new" if args.ef1_new_version else "ef1",
+                        "protocol": "ef1",
                         "config": "Full_no_ce",
-                        "ef1_version": ef1_version,
                     },
                 }
             )
@@ -200,11 +197,6 @@ def run_section0_figures_only(args) -> None:
 
 def main(argv=None):
     p = add_common_args(argparse.ArgumentParser(description="Section 0: EF1 diagnostic training"))
-    p.add_argument(
-        "--ef1-new-version",
-        action="store_true",
-        help="Use ef1_new_version=HM(conf, 1−p); write to section0_new_score/ (plots still say EF1).",
-    )
     p.add_argument(
         "--ef1-threshold",
         type=float,

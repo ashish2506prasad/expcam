@@ -35,7 +35,7 @@ from config import (
 from data import load_tensor, one_image_per_class, qualitative_image_ids
 from io_utils import ensure_dir, load_json, mean_std, rows_to_excel, save_json, write_csv
 from metrics import (
-    ef1_new_version,
+    explanation_f1,
     evaluate_explanation,
     fidelity_kl_component,
     match_abs_delta_topk,
@@ -375,7 +375,7 @@ def _knapsack_mask_at_budget(mask_prob, p_budget: float):
 def _eval_knapsack_point(bundle, x, mask_prob, p_budget: float, device) -> dict:
     mask_hard, k = _knapsack_mask_at_budget(mask_prob, p_budget)
     met = evaluate_explanation(bundle, x, mask_hard.to(device), mask_prob=mask_prob)
-    ef1 = ef1_new_version(met["conf_e"], met["p_actual"])
+    ef1 = explanation_f1(met["conf_e"], met["p_actual"])
     return {
         "p_budget": float(p_budget),
         "p_budget_pct": 100.0 * float(p_budget),
